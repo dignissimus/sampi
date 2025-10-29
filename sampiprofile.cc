@@ -62,7 +62,7 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
 void write_rank_chatter_to_file(const std::vector<std::vector<unsigned long long int>>& all_rank_chatter) {
     std::ofstream outfile("sampi_communication_profile.txt");
     if (!outfile.is_open()) {
-        std::cerr << "Error: Could not open output file!" << std::endl;
+        std::cerr << "Error: Could not open output file" << std::endl;
         return;
     }
     
@@ -76,7 +76,7 @@ void write_rank_chatter_to_file(const std::vector<std::vector<unsigned long long
     }
         
     outfile.close();
-    std::cout << "[PROFILE] Communication data written to mpi_communication_profile.txt" << std::endl;
+    std::cout << "[PROFILE] Communication data written to sampi_communication_profile.txt" << std::endl;
 }
 
 int MPI_Finalize() {
