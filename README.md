@@ -3,6 +3,7 @@
 # Usage
 
 ```bash
+# Produces build/libsampiprofile.so and build/libsampiboost.so
 bash build.sh
 ```
 
