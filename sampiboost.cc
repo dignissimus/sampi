@@ -16,89 +16,6 @@ static std::map<std::pair<int,int>, double> latency_map;
 static int global_rank;
 #define reorder(comm) (comm == MPI_COMM_WORLD ? reorder_comm_world : comm)
 
-
-static double measure_latency(int rank, int size) {
-    const int PING_PONGS = 100;
-    const int TAG = 123;
-    char msg = 'x';
-    double total_time = 0.0;
-
-    // TODO: Remove old message
-    const int MSG_SIZE = (2ull << 20) * 1024;
-    std::vector<char> message(MSG_SIZE, 'a');
-
-    for (int partner = 0; partner < size; ++partner) {
-        if (partner == rank) continue;
-
-        PMPI_Barrier(MPI_COMM_WORLD);
-
-        auto start = std::chrono::high_resolution_clock::now();
-
-        for (int i = 0; i < PING_PONGS; ++i) {
-            if (rank == partner) continue;
-
-            if (rank < partner) {
-                PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD);
-                PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            } else if (rank > partner) {
-                PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD);
-            }
-        }
-
-        auto end = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration<double>(end - start).count();
-
-        double latency = elapsed / (2.0 * PING_PONGS);
-
-        total_time += latency;
-        if (rank == 0)
-            std::cout << "[Latency] rank " << rank << " <-> " << partner
-                      << " = " << latency * 1e6 << " us" << std::endl;
-    }
-
-    return total_time / (size - 1);
-}
-
-static double measure_bandwidth(int rank, int size) {
-    const int MSG_SIZE = 1 << 20; // 1 MB
-    const int REPEATS = 10;
-    const int TAG = 234;
-
-    std::vector<char> buf(MSG_SIZE, 'a');
-    double total_bw = 0.0;
-
-    for (int partner = 0; partner < size; ++partner) {
-        if (partner == rank) continue;
-
-        MPI_Barrier(MPI_COMM_WORLD);
-        auto start = std::chrono::high_resolution_clock::now();
-
-        for (int i = 0; i < REPEATS; ++i) {
-            if (rank < partner) {
-                MPI_Send(buf.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD);
-                MPI_Recv(buf.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            } else if (rank > partner) {
-                MPI_Recv(buf.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                MPI_Send(buf.data(), MSG_SIZE, MPI_CHAR, partner, TAG, MPI_COMM_WORLD);
-            }
-        }
-
-        auto end = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration<double>(end - start).count();
-
-        double bytes = 2.0 * MSG_SIZE * REPEATS;
-        double bw = bytes / elapsed / 1e6;
-        total_bw += bw;
-
-        if (rank == 0)
-            std::cout << "[Bandwidth] rank " << rank << " <-> " << partner
-                      << " = " << bw << " MB/s" << std::endl;
-    }
-
-    return total_bw / (size - 1);
-}
-
 static double compute_cost(
     const std::vector<int>& mapping,
     const std::map<std::pair<int,int>, double>& latency_map,
@@ -198,7 +115,10 @@ int MPI_Init(int *argc, char ***argv) {
 
     const int PING_PONGS = 50;
     const int TAG = 999;
-    char msg = 'x';
+
+    // 8 bytes = 64 bits
+    const int MSG_SIZE = 8;
+    std::vector<char> message(MSG_SIZE, 'a');
 
     for (int i = 0; i < world_size; ++i) {
         for (int j = i+1; j < world_size; ++j) {
@@ -214,11 +134,11 @@ int MPI_Init(int *argc, char ***argv) {
 
                 for (int k = 0; k < PING_PONGS; ++k) {
                     if (world_rank < other) {
-                        PMPI_Send(&msg, 1, MPI_CHAR, other, TAG, MPI_COMM_WORLD);
-                        PMPI_Recv(&msg, 1, MPI_CHAR, other, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, other, TAG, MPI_COMM_WORLD);
+                        PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, other, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     } else {
-                        PMPI_Recv(&msg, 1, MPI_CHAR, other, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        PMPI_Send(&msg, 1, MPI_CHAR, other, TAG, MPI_COMM_WORLD);
+                        PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, other, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, other, TAG, MPI_COMM_WORLD);
                     }
                 }
 
