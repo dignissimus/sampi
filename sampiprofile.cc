@@ -7,6 +7,7 @@
 #include <string>
 #include <fstream>
 #include <map>
+#include <cstring>
 
 // TODO: Can replace with just a vector
 // Since I only record sends from this process
@@ -67,8 +68,6 @@ void write_rank_chatter_to_file(const std::vector<std::vector<unsigned long long
         return;
     }
     
-    int world_size = all_rank_chatter.size();
-    
     for (const auto& row : all_rank_chatter) {
       for (const auto& number : row) {
         outfile << number << ' ';
@@ -114,7 +113,7 @@ int MPI_Finalize() {
         MPI_Send(send_to_vector.data(), global_world_size, MPI_LONG_LONG, 0, 0, MPI_COMM_WORLD);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    PMPI_Barrier(MPI_COMM_WORLD);
     
     return PMPI_Finalize();
 }
@@ -237,6 +236,41 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm) {
     *newcomm
   );
   communicator_participants[new_comm_name] = world_ranks_array;
+  return result;
+}
+
+int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm) {
+    int result = PMPI_Comm_dup(comm, newcomm);
+
+    char original_name[MPI_MAX_OBJECT_NAME];
+    int original_name_length;
+    MPI_Comm_get_name(comm, original_name, &original_name_length);
+
+    int ndups = ++split_count[std::string(original_name)];
+    std::string new_comm_name = std::string(original_name) + " (dup) (id=" + std::to_string(ndups) + ")";
+    MPI_Comm_set_name(*newcomm, new_comm_name.c_str());
+
+    int new_size;
+    PMPI_Comm_size(*newcomm, &new_size);
+    std::vector<int> world_ranks_array(new_size);
+    PMPI_Allgather(
+        &global_rank,
+        1,
+        MPI_INT,
+        world_ranks_array.data(),
+        1,
+        MPI_INT,
+        *newcomm
+    );
+    communicator_participants[new_comm_name] = world_ranks_array;
+
+    return result;
+}
+
+int MPI_Barrier(MPI_Comm comm) {
+    INC_COMM(comm);
+    std::cout << "[PROFILE] MPI_Barrier called" << std::endl;
+    return PMPI_Barrier(comm);
 }
 
 int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int periods[], int reorder, MPI_Comm *comm_cart) {
