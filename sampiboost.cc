@@ -102,18 +102,13 @@ std::map<std::pair<int, int>, int> read_communication_profile(const std::string&
     return rank_comm;
 }
 
-int MPI_Init(int *argc, char ***argv) {
-    int return_value = PMPI_Init(argc, argv);
-
+std::map<std::pair<int,int>, double> compute_latency_map() {
     int world_rank, world_size;
     PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    global_rank = world_rank;
-
     const int PING_PONGS = 50;
     const int TAG = 999;
-
     const int MSG_SIZE = 8;
     std::vector<char> message(MSG_SIZE, 'a');
 
@@ -149,6 +144,20 @@ int MPI_Init(int *argc, char ***argv) {
             latency_map[{j,i}] = latency;
         }
     }
+    return latency_map;
+
+}
+
+int MPI_Init(int *argc, char ***argv) {
+    int return_value = PMPI_Init(argc, argv);
+
+    int world_rank, world_size;
+    PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    global_rank = world_rank;
+
+    latency_map = compute_latency_map();
 
     if (world_rank == 0) {
         std::cout << "[HOOK] Latency matrix:\n";
@@ -313,53 +322,7 @@ extern "C" {
 
         global_rank = world_rank;
 
-        const int PING_PONGS = 50;
-        const int TAG = 999;
-        const int MSG_SIZE = 8;
-        std::vector<char> message(MSG_SIZE, 'a');
-
-        MPI_Fint f_char = MPI_Type_c2f(MPI_CHAR);
-        MPI_Fint f_double = MPI_Type_c2f(MPI_DOUBLE);
-        MPI_Fint f_status_ignore = MPI_Comm_c2f((MPI_Comm)MPI_F_STATUS_IGNORE);
-
-        for (int i = 0; i < world_size; ++i) {
-            for (int j = i + 1; j < world_size; ++j) {
-                double latency = 0.0;
-
-                pmpi_barrier_(&f_comm_world, &ierr);
-
-                if (world_rank == i || world_rank == j) {
-                    int other = (world_rank == i) ? j : i;
-
-                    auto start = std::chrono::high_resolution_clock::now();
-
-                    for (int k = 0; k < PING_PONGS; ++k) {
-                        int count = MSG_SIZE;
-                        int tag_val = TAG;
-                        if (world_rank < other) {
-                            int dest = other;
-                            pmpi_send_(message.data(), &count, &f_char, &dest, &tag_val, &f_comm_world, &ierr);
-                            int source = other;
-                            pmpi_recv_(message.data(), &count, &f_char, &source, &tag_val, &f_comm_world, &f_status_ignore, &ierr);
-                        } else {
-                            int source = other;
-                            pmpi_recv_(message.data(), &count, &f_char, &source, &tag_val, &f_comm_world, &f_status_ignore, &ierr);
-                            int dest = other;
-                            pmpi_send_(message.data(), &count, &f_char, &dest, &tag_val, &f_comm_world, &ierr);
-                        }
-                    }
-                    auto end = std::chrono::high_resolution_clock::now();
-                    latency = std::chrono::duration<double>(end - start).count() / (2.0 * PING_PONGS);
-                }
-
-                int count = 1;
-                int root = i;
-                pmpi_bcast_(&latency, &count, &f_double, &root, &f_comm_world, &ierr);
-
-                latency_map[{i, j}] = latency;
-                latency_map[{j, i}] = latency;
-            }
-        }
+        latency_map = compute_latency_map();
 
         if (world_rank == 0) {
             std::cout << "[HOOK] Latency matrix:\n";
