@@ -68,10 +68,6 @@ std::vector<int> compute_rank_map(
         if (!improved) break;
     }
 
-    std::cout << "[ALARM] Runtime rank -> Profile rank";
-    for (int i = 0; i < size; ++i)
-        std::cout << "Runtime " << i << " -> Profile " << mapping[i] << "\n";
-
     return mapping;
 }
 
@@ -149,6 +145,7 @@ std::map<std::pair<int,int>, double> compute_latency_map() {
 }
 
 int MPI_Init(int *argc, char ***argv) {
+    std::cout << "[ALARM] MPI_Init called" << std::endl;
     int return_value = PMPI_Init(argc, argv);
 
     int world_rank, world_size;
@@ -166,7 +163,7 @@ int MPI_Init(int *argc, char ***argv) {
     int reorder_rank, reorder_size;
     PMPI_Comm_rank(reorder_comm_world, &reorder_rank);
     PMPI_Comm_size(reorder_comm_world, &reorder_size);
-    std::cout << "[ALARM] MPI_Init called" << std::endl;
+    std::cout << "[ALARM] Re-ordered ranks" << std::endl;
     return return_value;
 }
 
