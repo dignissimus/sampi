@@ -24,4 +24,5 @@ extern "C" {
   void pmpi_comm_get_name_(MPI_Fint *comm, char *name, int *len, int *ierror, int name_len);
   void pmpi_comm_set_name_(MPI_Fint *comm, char *name, int *ierror, int name_len);
   void pmpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror);
+  void pmpi_comm_free_(MPI_Fint *comm, int *ierror);
 }

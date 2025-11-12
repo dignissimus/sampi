@@ -174,6 +174,9 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
 
 int MPI_Finalize() {
     std::cout << "[ALARM] MPI_Finalize called" << std::endl;
+    if (reorder_comm_world != MPI_COMM_NULL) {
+        PMPI_Comm_free(&reorder_comm_world);
+    }
     return PMPI_Finalize();
 }
 
@@ -353,6 +356,13 @@ extern "C" {
 
     void mpi_finalize_(int *ierror) {
         std::cout << "[ALARM] MPI_Finalize called" << std::endl;
+        pmpi_finalize_(ierror);
+        if (reorder_comm_world != MPI_COMM_NULL) {
+            MPI_Fint f_reorder_comm = MPI_Comm_c2f(reorder_comm_world);
+            int ierr;
+            pmpi_comm_free_(&f_reorder_comm, &ierr);
+            reorder_comm_world = MPI_COMM_NULL;
+        }
         pmpi_finalize_(ierror);
     }
 
