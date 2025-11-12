@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <mpi.h>
 #include <iostream>
 #include <vector>
@@ -51,8 +50,6 @@ std::vector<int> compute_rank_map(
     // 2 opt
     while (improved) {
         improved = false;
-        double current_best = best_cost;
-
         for (int i = 0; i < size; ++i) {
             for (int j = i + 1; j < size; ++j) {
                 std::swap(mapping[i], mapping[j]);
@@ -116,7 +113,6 @@ int MPI_Init(int *argc, char ***argv) {
     const int PING_PONGS = 50;
     const int TAG = 999;
 
-    // 8 bytes = 64 bits
     const int MSG_SIZE = 8;
     std::vector<char> message(MSG_SIZE, 'a');
 
@@ -287,4 +283,8 @@ int MPI_Comm_size(MPI_Comm comm, int *size) {
     return ret;
 }
 
+
+int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int periods[], int reorder, MPI_Comm *comm_cart) {
+    return PMPI_Cart_create(reorder(comm_old), ndims, dims, periods, reorder, comm_cart);
+}
 

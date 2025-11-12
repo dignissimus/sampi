@@ -7,11 +7,13 @@
 #include <numeric>
 #include <string>
 #include <fstream>
+#include <map>
 
 // TODO: Can replace with just a vector
 // Since I only record sends from global_rank
 static std::map<std::pair<int,int>, unsigned long long int> partial_rank_chatter;
 static std::map<std::string, std::vector<int>> communicator_participants;
+std::map<std::string, int> split_count;
 static int global_rank;
 static int global_world_size;
 
@@ -219,7 +221,8 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm) {
   int original_name_length;
   MPI_Comm_get_name(comm, original_name, &original_name_length);
 
-  std::string new_comm_name = std::string(original_name) + " (split: " + std::to_string(color) + ")";
+  int nsplits = ++split_count[std::string(original_name)];
+  std::string new_comm_name = std::string(original_name) + " (split) (id=" + std::to_string(nsplits) + ") (colour=" + std::to_string(color) + ")";
   MPI_Comm_set_name(*newcomm, new_comm_name.c_str());
 
   int new_size;
@@ -235,4 +238,33 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm) {
     *newcomm
   );
   communicator_participants[new_comm_name] = world_ranks_array;
+}
+
+int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int periods[], int reorder, MPI_Comm *comm_cart) {
+    int result = PMPI_Cart_create(comm_old, ndims, dims, periods, reorder, comm_cart);
+
+    char original_name[MPI_MAX_OBJECT_NAME];
+    int original_name_length;
+    MPI_Comm_get_name(comm_old, original_name, &original_name_length);
+
+    int nsplits = ++split_count[std::string(original_name)];
+    std::string new_comm_name = std::string(original_name) + " (cart) " + "(id=" + std::to_string(nsplits) + ")";
+    MPI_Comm_set_name(*comm_cart, new_comm_name.c_str());
+
+    int new_size;
+    PMPI_Comm_size(*comm_cart, &new_size);
+
+    std::vector<int> world_ranks_array(new_size);
+    PMPI_Allgather(
+        &global_rank,
+        1,
+        MPI_INT,
+        world_ranks_array.data(),
+        1,
+        MPI_INT,
+        *comm_cart
+    );
+
+    communicator_participants[new_comm_name] = world_ranks_array;
+    return result;
 }
