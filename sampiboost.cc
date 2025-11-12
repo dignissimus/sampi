@@ -68,7 +68,7 @@ std::vector<int> compute_rank_map(
         if (!improved) break;
     }
 
-    std::cout << "[HOOK] Runtime rank -> Profile rank";
+    std::cout << "[ALARM] Runtime rank -> Profile rank";
     for (int i = 0; i < size; ++i)
         std::cout << "Runtime " << i << " -> Profile " << mapping[i] << "\n";
 
@@ -159,36 +159,33 @@ int MPI_Init(int *argc, char ***argv) {
 
     latency_map = compute_latency_map();
 
-    if (world_rank == 0) {
-        std::cout << "[HOOK] Latency matrix:\n";
-        for (int i = 0; i < world_size; ++i) {
-            for (int j = 0; j < world_size; ++j) {
-                if (i == j) std::cout << "0.0 ";
-                else std::cout << latency_map[{i,j}] << " ";
-            }
-            std::cout << "\n";
-        }
-    }
-
     auto rank_comm = read_communication_profile("sampi_communication_profile.txt", world_size);
     rank_map = compute_rank_map(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
-    MPI_Comm_split(MPI_COMM_WORLD, 0, new_rank, &reorder_comm_world);
+    PMPI_Comm_split(MPI_COMM_WORLD, 0, new_rank, &reorder_comm_world);
     int reorder_rank, reorder_size;
     PMPI_Comm_rank(reorder_comm_world, &reorder_rank);
     PMPI_Comm_size(reorder_comm_world, &reorder_size);
-    std::cout << "[HOOK] MPI_Init called" << std::endl;
+    std::cout << "[ALARM] MPI_Init called" << std::endl;
     return return_value;
 }
 
 int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
-    std::cout << "[HOOK] MPI_Init_thread called (required=" << required << ")" << std::endl;
+    std::cout << "[ALARM] MPI_Init_thread called" << std::endl;
     return PMPI_Init_thread(argc, argv, required, provided);
 }
 
 int MPI_Finalize() {
-    std::cout << "[HOOK] MPI_Finalize called" << std::endl;
+    std::cout << "[ALARM] MPI_Finalize called" << std::endl;
     return PMPI_Finalize();
+}
+
+int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm) {
+    return PMPI_Comm_dup(reorder(comm), newcomm);
+}
+
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm) {
+    return PMPI_Comm_split(reorder(comm), color, key, newcomm);
 }
 
 // point to point
@@ -348,17 +345,17 @@ extern "C" {
         pmpi_comm_rank_(&f_new_comm, &reorder_rank, &ierr);
         pmpi_comm_size_(&f_new_comm, &reorder_size, &ierr);
 
-        std::cout << "[HOOK] MPI_Init called" << std::endl;
+        std::cout << "[ALARM] MPI_Init called" << std::endl;
     }
 
     // todo: need to reorder in init thread
     void mpi_init_thread_(int *required, int *provided, int *ierror) {
-        std::cout << "[HOOK] MPI_Init_thread called (required=" << *required << ")" << std::endl;
+        std::cout << "[ALARM] MPI_Init_thread called" << std::endl;
         pmpi_init_thread_(required, provided, ierror);
     }
 
     void mpi_finalize_(int *ierror) {
-        std::cout << "[HOOK] MPI_Finalize called" << std::endl;
+        std::cout << "[ALARM] MPI_Finalize called" << std::endl;
         pmpi_finalize_(ierror);
     }
 
@@ -443,6 +440,16 @@ extern "C" {
     void mpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods, int *reorder_f, MPI_Fint *comm_cart_f, int *ierror) {
         MPI_Fint reordered_comm = reorder_comm_f(*comm_old);
         pmpi_cart_create_(&reordered_comm, ndims, dims, periods, reorder_f, comm_cart_f, ierror);
+    }
+
+    void mpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror) {
+        MPI_Fint reordered_comm_old = reorder_comm_f(*comm);
+        pmpi_comm_dup_(&reordered_comm_old, newcomm_f, ierror);
+    }
+
+    void mpi_comm_split_(MPI_Fint *comm, int *color, int *key, MPI_Fint *newcomm_f, int *ierror) {
+        MPI_Fint reordered_comm_old = reorder_comm_f(*comm);
+        pmpi_comm_split_(&reordered_comm_old, color, key, newcomm_f, ierror);
     }
 
 }
