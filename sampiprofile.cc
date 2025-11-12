@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <mpi.h>
 #include <iostream>
 #include <vector>
@@ -10,7 +9,7 @@
 #include <map>
 
 // TODO: Can replace with just a vector
-// Since I only record sends from global_rank
+// Since I only record sends from this process
 static std::map<std::pair<int,int>, unsigned long long int> partial_rank_chatter;
 static std::map<std::string, std::vector<int>> communicator_participants;
 std::map<std::string, int> split_count;
