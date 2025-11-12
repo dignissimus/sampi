@@ -267,7 +267,7 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
 }
 
 int MPI_Barrier(MPI_Comm comm) {
-    std::cout << "[HOOK] MPI_Barrier called" << std::endl;
+    // std::cout << "[HOOK] MPI_Barrier called" << std::endl;
     return PMPI_Barrier(reorder(comm));
 }
 
