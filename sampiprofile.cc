@@ -301,3 +301,333 @@ int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int pe
     communicator_participants[new_comm_name] = world_ranks_array;
     return result;
 }
+
+// fortran: todo, deduplicate init and finalise
+extern "C" {
+    void pmpi_init_(int *ierror);
+    void pmpi_init_thread_(int *required, int *provided, int *ierror);
+    void pmpi_finalize_(int *ierror);
+    void pmpi_send_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror);
+    void pmpi_recv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror);
+    void pmpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror);
+    void pmpi_irecv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror);
+    void pmpi_wait_(MPI_Fint *request_f, MPI_Fint *status_f, int *ierror);
+    void pmpi_waitall_(int *count, MPI_Fint *requests_f, MPI_Fint *statuses_f, int *ierror);
+    void pmpi_bcast_(void *buffer, int *count, MPI_Fint *datatype, int *root, MPI_Fint *comm, int *ierror);
+    void pmpi_reduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, int *root, MPI_Fint *comm, int *ierror);
+    void pmpi_allreduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, MPI_Fint *comm, int *ierror);
+    void pmpi_scatter_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror);
+    void pmpi_gather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror);
+    void pmpi_allgather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror);
+    void pmpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror);
+    void pmpi_comm_split_(MPI_Fint *comm, int *color, int *key, MPI_Fint *newcomm_f, int *ierror);
+    void pmpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods, int *reorder, MPI_Fint *comm_cart_f, int *ierror);
+
+    void pmpi_comm_rank_(MPI_Fint *comm, int *rank, int *ierror);
+    void pmpi_comm_size_(MPI_Fint *comm, int *size, int *ierror);
+    void pmpi_barrier_(MPI_Fint *comm, int *ierror);
+    void pmpi_comm_get_name_(MPI_Fint *comm, char *name, int *len, int *ierror, int name_len);
+    void pmpi_comm_set_name_(MPI_Fint *comm, char *name, int *ierror, int name_len);
+    void pmpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror);
+
+    void Fortran_PMPI_Comm_get_name(MPI_Comm c_comm, char* name, int* len) {
+        MPI_Fint f_comm = MPI_Comm_c2f(c_comm);
+        int ierror;
+        pmpi_comm_get_name_(&f_comm, name, len, &ierror, MPI_MAX_OBJECT_NAME);
+        name[*len] = '\0';
+    }
+
+    void Fortran_PMPI_Comm_set_name(MPI_Comm c_comm, const char* name) {
+        MPI_Fint f_comm = MPI_Comm_c2f(c_comm);
+        int ierror;
+        char f_name[MPI_MAX_OBJECT_NAME];
+        strncpy(f_name, name, MPI_MAX_OBJECT_NAME - 1);
+        f_name[MPI_MAX_OBJECT_NAME - 1] = '\0';
+        int len = strlen(f_name);
+        // todo: pad with what?
+        for(int i = len; i < MPI_MAX_OBJECT_NAME; ++i) {
+            f_name[i] = ' ';
+        }
+        pmpi_comm_set_name_(&f_comm, f_name, &ierror, MPI_MAX_OBJECT_NAME);
+    }
+
+
+    void mpi_init_(int *ierror) {
+        pmpi_init_(ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
+        int world_rank, world_size, ierr;
+        MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+
+        pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
+        pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+
+        char world_rank_name[MPI_MAX_OBJECT_NAME];
+        int world_rank_name_length;
+        MPI_Comm_get_name(MPI_COMM_WORLD, world_rank_name, &world_rank_name_length);
+
+        for (int i = 0; i < world_size; ++i) {
+            communicator_participants[std::string(world_rank_name)].push_back(i);
+        }
+
+        global_rank = world_rank;
+        global_world_size = world_size;
+    }
+
+    void mpi_init_thread_(int *required, int *provided, int *ierror) {
+        std::cout << "[PROFILE] MPI_Init_thread called (required=" << *required << ")" << std::endl;
+        pmpi_init_thread_(required, provided, ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
+        int world_rank, world_size, ierr;
+        MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+
+        pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
+        pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+
+        char world_rank_name[MPI_MAX_OBJECT_NAME];
+        int world_rank_name_length;
+        MPI_Comm_get_name(MPI_COMM_WORLD, world_rank_name, &world_rank_name_length);
+
+        for (int i = 0; i < world_size; ++i) {
+            communicator_participants[std::string(world_rank_name)].push_back(i);
+        }
+
+        global_rank = world_rank;
+        global_world_size = world_size;
+    }
+
+    void mpi_finalize_(int *ierror) {
+        std::cout << "[PROFILE] MPI_Finalize called" << std::endl;
+
+        MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+        MPI_Fint f_long_long = MPI_Type_c2f(MPI_LONG_LONG);
+        int f_ierr;
+
+        if (global_rank == 0) {
+            std::vector<std::vector<unsigned long long int>> all_rank_chatter(
+                global_world_size,
+                std::vector<unsigned long long int>(global_world_size, 0)
+            );
+
+            for (int i = 0; i < global_world_size; ++i) {
+                all_rank_chatter[0][i] = partial_rank_chatter[{0, i}];
+                all_rank_chatter[i][0] = partial_rank_chatter[{0, i}];
+            }
+
+            for (int i = 1; i < global_world_size; ++i) {
+                std::vector<unsigned long long int> rank_data(global_world_size, 0);
+                int count = global_world_size;
+                int source = i;
+                int tag = 0;
+                pmpi_recv_(rank_data.data(), &count, &f_long_long, &source, &tag, &f_comm_world,
+                         (MPI_Fint*)MPI_F_STATUS_IGNORE, &f_ierr);
+
+                for (int j = 0; j < global_world_size; ++j) {
+                    all_rank_chatter[i][j] += rank_data[j];
+                    all_rank_chatter[j][i] += rank_data[j];
+                }
+            }
+            write_rank_chatter_to_file(all_rank_chatter);
+        }
+        else {
+            std::vector<unsigned long long int> send_to_vector(global_world_size, 0);
+            for (int i = 0; i < global_world_size; ++i) {
+                send_to_vector[i] = partial_rank_chatter[{global_rank, i}];
+            }
+            int count = global_world_size;
+            int dest = 0;
+            int tag = 0;
+            pmpi_send_(send_to_vector.data(), &count, &f_long_long, &dest, &tag, &f_comm_world, &f_ierr);
+        }
+
+        pmpi_barrier_(&f_comm_world, &f_ierr);
+
+        pmpi_finalize_(ierror);
+    }
+
+    void mpi_send_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC(global_rank, MAP(c_comm, *dest));
+        std::cout << "[PROFILE] MPI_Send -> dest=" << *dest << ", tag=" << *tag
+                  << ", count=" << *count << std::endl;
+
+        pmpi_send_(buf, count, datatype, dest, tag, comm, ierror);
+    }
+
+    void mpi_recv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror) {
+        std::cout << "[PROFILE] MPI_Recv <- source=" << *source << ", tag=" << *tag
+                  << ", count=" << *count << std::endl;
+
+        pmpi_recv_(buf, count, datatype, source, tag, comm, status_f, ierror);
+    }
+
+    void mpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC(global_rank, MAP(c_comm, *dest));
+        std::cout << "[PROFILE] MPI_Isend -> dest=" << *dest << ", tag=" << *tag << std::endl;
+
+        pmpi_isend_(buf, count, datatype, dest, tag, comm, request_f, ierror);
+    }
+
+    void mpi_irecv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+        std::cout << "[PROFILE] MPI_Irecv <- source=" << *source << ", tag=" << *tag << std::endl;
+
+        pmpi_irecv_(buf, count, datatype, source, tag, comm, request_f, ierror);
+    }
+
+    void mpi_wait_(MPI_Fint *request_f, MPI_Fint *status_f, int *ierror) {
+        std::cout << "[PROFILE] MPI_Wait called" << std::endl;
+        pmpi_wait_(request_f, status_f, ierror);
+    }
+
+    void mpi_waitall_(int *count, MPI_Fint *requests_f, MPI_Fint *statuses_f, int *ierror) {
+        std::cout << "[PROFILE] MPI_Waitall called (" << *count << " requests)" << std::endl;
+        pmpi_waitall_(count, requests_f, statuses_f, ierror);
+    }
+
+    void mpi_bcast_(void *buffer, int *count, MPI_Fint *datatype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Bcast from root=" << *root << ", count=" << *count << std::endl;
+        pmpi_bcast_(buffer, count, datatype, root, comm, ierror);
+    }
+
+    void mpi_reduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, int *root, MPI_Fint *comm, int *ierror) {
+        std::cout << "[PROFILE] MPI_Reduce -> root=" << *root << ", count=" << *count << std::endl;
+        pmpi_reduce_(sendbuf, recvbuf, count, datatype, op, root, comm, ierror);
+    }
+
+    void mpi_allreduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Allreduce called (" << *count << " elements)" << std::endl;
+        pmpi_allreduce_(sendbuf, recvbuf, count, datatype, op, comm, ierror);
+    }
+
+    void mpi_scatter_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Scatter from root=" << *root << std::endl;
+        pmpi_scatter_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm, ierror);
+    }
+
+    void mpi_gather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Gather to root=" << *root << std::endl;
+        pmpi_gather_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm, ierror);
+    }
+
+    void mpi_allgather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Allgather called (" << *sendcount << " elements per rank)" << std::endl;
+        pmpi_allgather_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm, ierror);
+    }
+
+    void mpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Alltoall called" << std::endl;
+        pmpi_alltoall_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm, ierror);
+    }
+
+    void mpi_comm_split_(MPI_Fint *comm, int *color, int *key, MPI_Fint *newcomm_f, int *ierror) {
+        pmpi_comm_split_(comm, color, key, newcomm_f, ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        MPI_Comm c_newcomm = MPI_Comm_f2c(*newcomm_f);
+        if (c_newcomm == MPI_COMM_NULL) return;
+
+        char original_name[MPI_MAX_OBJECT_NAME];
+        int original_name_length;
+        MPI_Comm_get_name(c_comm, original_name, &original_name_length);
+
+        int nsplits = ++split_count[std::string(original_name)];
+        std::string new_comm_name = std::string(original_name) + " (split) (id=" + std::to_string(
+            nsplits) + ") (colour=" + std::to_string(*color) + ")";
+        MPI_Comm_set_name(c_newcomm, new_comm_name.c_str());
+
+        int new_size, f_ierr;
+        MPI_Fint f_newcomm = *newcomm_f;
+        pmpi_comm_size_(&f_newcomm, &new_size, &f_ierr);
+
+        std::vector<int> world_ranks_array(new_size);
+        int sendcount = 1, recvcount = 1;
+        MPI_Fint f_int_type = MPI_Type_c2f(MPI_INT);
+
+        pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
+                        world_ranks_array.data(), &recvcount, &f_int_type,
+                        &f_newcomm, &f_ierr);
+
+        communicator_participants[new_comm_name] = world_ranks_array;
+    }
+
+    void mpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods, int *reorder, MPI_Fint *comm_cart_f, int *ierror) {
+        pmpi_cart_create_(comm_old, ndims, dims, periods, reorder, comm_cart_f, ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
+        MPI_Comm c_comm_old = MPI_Comm_f2c(*comm_old);
+        MPI_Comm c_comm_cart = MPI_Comm_f2c(*comm_cart_f);
+        if (c_comm_cart == MPI_COMM_NULL) return;
+
+        char original_name[MPI_MAX_OBJECT_NAME];
+        int original_name_length;
+        MPI_Comm_get_name(c_comm_old, original_name, &original_name_length);
+
+        int nsplits = ++split_count[std::string(original_name)];
+        std::string new_comm_name = std::string(original_name) + " (cart) " + "(id=" + std::to_string(nsplits) + ")";
+        MPI_Comm_set_name(c_comm_cart, new_comm_name.c_str());
+
+        int new_size, f_ierr;
+        MPI_Fint f_cart_comm = *comm_cart_f;
+        pmpi_comm_size_(&f_cart_comm, &new_size, &f_ierr);
+
+        std::vector<int> world_ranks_array(new_size);
+        int sendcount = 1, recvcount = 1;
+        MPI_Fint f_int_type = MPI_Type_c2f(MPI_INT);
+
+        pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
+                        world_ranks_array.data(), &recvcount, &f_int_type,
+                        &f_cart_comm, &f_ierr);
+
+        communicator_participants[new_comm_name] = world_ranks_array;
+    }
+
+    void mpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror) {
+        pmpi_comm_dup_(comm, newcomm_f, ierror);
+
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        MPI_Comm c_newcomm = MPI_Comm_f2c(*newcomm_f);
+
+        char original_name[MPI_MAX_OBJECT_NAME];
+        int original_name_length;
+        MPI_Comm_get_name(c_comm, original_name, &original_name_length);
+        int ndups = ++split_count[std::string(original_name)];
+        std::string new_comm_name = std::string(original_name) + " (dup) (id=" + std::to_string(ndups) + ")";
+        MPI_Comm_set_name(c_newcomm, new_comm_name.c_str());
+
+        int new_size, f_ierr;
+        MPI_Fint f_newcomm = *newcomm_f;
+        pmpi_comm_size_(&f_newcomm, &new_size, &f_ierr);
+
+        std::vector<int> world_ranks_array(new_size);
+        int sendcount = 1, recvcount = 1;
+        MPI_Fint f_int_type = MPI_Type_c2f(MPI_INT);
+
+        pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
+                        world_ranks_array.data(), &recvcount, &f_int_type,
+                        &f_newcomm, &f_ierr);
+
+        communicator_participants[new_comm_name] = world_ranks_array;
+  }
+
+    void mpi_barrier_(MPI_Fint *comm, int *ierror) {
+        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+        INC_COMM(c_comm);
+        std::cout << "[PROFILE] MPI_Barrier called" << std::endl;
+        pmpi_barrier_(comm, ierror);
+    }
+}
