@@ -8,6 +8,7 @@
 #include <sstream>
 #include <map>
 #include <utility>
+#include "fortran_headers.h"
 
 static MPI_Comm reorder_comm_world = MPI_COMM_NULL;
 static std::vector<int> rank_map;
@@ -288,3 +289,197 @@ int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int pe
     return PMPI_Cart_create(reorder(comm_old), ndims, dims, periods, reorder, comm_cart);
 }
 
+
+static MPI_Fint reorder_comm_f(MPI_Fint f_comm) {
+    MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
+    if (c_comm == MPI_COMM_WORLD && reorder_comm_world != MPI_COMM_NULL) {
+        return MPI_Comm_c2f(reorder_comm_world);
+    }
+    return f_comm;
+}
+
+// todo: deduplicate initialisation logic
+extern "C" {
+
+    void mpi_init_(int *ierror) {
+        pmpi_init_(ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
+        int world_rank, world_size, ierr;
+        MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+
+        pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
+        pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+
+        global_rank = world_rank;
+
+        const int PING_PONGS = 50;
+        const int TAG = 999;
+        const int MSG_SIZE = 8;
+        std::vector<char> message(MSG_SIZE, 'a');
+
+        MPI_Fint f_char = MPI_Type_c2f(MPI_CHAR);
+        MPI_Fint f_double = MPI_Type_c2f(MPI_DOUBLE);
+        MPI_Fint f_status_ignore = MPI_Comm_c2f((MPI_Comm)MPI_F_STATUS_IGNORE);
+
+        for (int i = 0; i < world_size; ++i) {
+            for (int j = i + 1; j < world_size; ++j) {
+                double latency = 0.0;
+
+                pmpi_barrier_(&f_comm_world, &ierr);
+
+                if (world_rank == i || world_rank == j) {
+                    int other = (world_rank == i) ? j : i;
+
+                    auto start = std::chrono::high_resolution_clock::now();
+
+                    for (int k = 0; k < PING_PONGS; ++k) {
+                        int count = MSG_SIZE;
+                        int tag_val = TAG;
+                        if (world_rank < other) {
+                            int dest = other;
+                            pmpi_send_(message.data(), &count, &f_char, &dest, &tag_val, &f_comm_world, &ierr);
+                            int source = other;
+                            pmpi_recv_(message.data(), &count, &f_char, &source, &tag_val, &f_comm_world, &f_status_ignore, &ierr);
+                        } else {
+                            int source = other;
+                            pmpi_recv_(message.data(), &count, &f_char, &source, &tag_val, &f_comm_world, &f_status_ignore, &ierr);
+                            int dest = other;
+                            pmpi_send_(message.data(), &count, &f_char, &dest, &tag_val, &f_comm_world, &ierr);
+                        }
+                    }
+                    auto end = std::chrono::high_resolution_clock::now();
+                    latency = std::chrono::duration<double>(end - start).count() / (2.0 * PING_PONGS);
+                }
+
+                int count = 1;
+                int root = i;
+                pmpi_bcast_(&latency, &count, &f_double, &root, &f_comm_world, &ierr);
+
+                latency_map[{i, j}] = latency;
+                latency_map[{j, i}] = latency;
+            }
+        }
+
+        if (world_rank == 0) {
+            std::cout << "[HOOK] Latency matrix:\n";
+            for (int i = 0; i < world_size; ++i) {
+                for (int j = 0; j < world_size; ++j) {
+                    if (i == j) std::cout << "0.0 ";
+                    else std::cout << latency_map[{i,j}] << " ";
+                }
+                std::cout << "\n";
+            }
+        }
+
+        auto rank_comm = read_communication_profile("sampi_communication_profile.txt", world_size);
+        rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+        int new_rank = rank_map[world_rank];
+
+        MPI_Fint f_new_comm;
+        int color = 0;
+        pmpi_comm_split_(&f_comm_world, &color, &new_rank, &f_new_comm, &ierr);
+        reorder_comm_world = MPI_Comm_f2c(f_new_comm);
+
+        int reorder_rank, reorder_size;
+        pmpi_comm_rank_(&f_new_comm, &reorder_rank, &ierr);
+        pmpi_comm_size_(&f_new_comm, &reorder_size, &ierr);
+
+        std::cout << "[HOOK] MPI_Init called" << std::endl;
+    }
+
+    // todo: need to reorder in init thread
+    void mpi_init_thread_(int *required, int *provided, int *ierror) {
+        std::cout << "[HOOK] MPI_Init_thread called (required=" << *required << ")" << std::endl;
+        pmpi_init_thread_(required, provided, ierror);
+    }
+
+    void mpi_finalize_(int *ierror) {
+        std::cout << "[HOOK] MPI_Finalize called" << std::endl;
+        pmpi_finalize_(ierror);
+    }
+
+    void mpi_send_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_send_(buf, count, datatype, dest, tag, &reordered_comm, ierror);
+    }
+
+    void mpi_recv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_recv_(buf, count, datatype, source, tag, &reordered_comm, status_f, ierror);
+    }
+
+    void mpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_isend_(buf, count, datatype, dest, tag, &reordered_comm, request_f, ierror);
+    }
+
+    void mpi_irecv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_irecv_(buf, count, datatype, source, tag, &reordered_comm, request_f, ierror);
+    }
+
+    void mpi_wait_(MPI_Fint *request_f, MPI_Fint *status_f, int *ierror) {
+        pmpi_wait_(request_f, status_f, ierror);
+    }
+
+    void mpi_waitall_(int *count, MPI_Fint *requests_f, MPI_Fint *statuses_f, int *ierror) {
+        pmpi_waitall_(count, requests_f, statuses_f, ierror);
+    }
+
+    void mpi_bcast_(void *buffer, int *count, MPI_Fint *datatype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_bcast_(buffer, count, datatype, root, &reordered_comm, ierror);
+    }
+
+    void mpi_reduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_reduce_(sendbuf, recvbuf, count, datatype, op, root, &reordered_comm, ierror);
+    }
+
+    void mpi_allreduce_(const void *sendbuf, void *recvbuf, int *count, MPI_Fint *datatype, MPI_Fint *op, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_allreduce_(sendbuf, recvbuf, count, datatype, op, &reordered_comm, ierror);
+    }
+
+    void mpi_scatter_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_scatter_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, &reordered_comm, ierror);
+    }
+
+    void mpi_gather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_gather_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, &reordered_comm, ierror);
+    }
+
+    void mpi_allgather_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_allgather_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, &reordered_comm, ierror);
+    }
+
+    void mpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype, void *recvbuf, int *recvcount, MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_alltoall_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, &reordered_comm, ierror);
+    }
+
+    void mpi_barrier_(MPI_Fint *comm, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_barrier_(&reordered_comm, ierror);
+    }
+
+    void mpi_comm_rank_(MPI_Fint *comm, int *rank, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_comm_rank_(&reordered_comm, rank, ierror);
+    }
+
+    void mpi_comm_size_(MPI_Fint *comm, int *size, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm);
+        pmpi_comm_size_(&reordered_comm, size, ierror);
+    }
+
+    void mpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods, int *reorder_f, MPI_Fint *comm_cart_f, int *ierror) {
+        MPI_Fint reordered_comm = reorder_comm_f(*comm_old);
+        pmpi_cart_create_(&reordered_comm, ndims, dims, periods, reorder_f, comm_cart_f, ierror);
+    }
+
+}
