@@ -363,7 +363,6 @@ extern "C" {
             pmpi_comm_free_(&f_reorder_comm, &ierr);
             reorder_comm_world = MPI_COMM_NULL;
         }
-        pmpi_finalize_(ierror);
     }
 
     void mpi_send_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
