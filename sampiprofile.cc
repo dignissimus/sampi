@@ -25,6 +25,22 @@ std::string COMM_NAME(const MPI_Comm& comm) {
   return std::string(comm_name);
 }
 
+
+std::string COMM_NAME_F(MPI_Fint f_comm) {
+    char comm_name[MPI_MAX_OBJECT_NAME];
+    int comm_name_length = 0;
+    int ierr = 0;
+    pmpi_comm_get_name_(&f_comm, comm_name, &comm_name_length, &ierr, MPI_MAX_OBJECT_NAME);
+    if (ierr == MPI_SUCCESS && comm_name_length > 0) {
+        return std::string(comm_name, comm_name_length);
+    }
+    else {
+      std::cerr << "Unable to get name for Fortran communicator with id" << f_comm << std::endl;
+    }
+    return std::string("???");
+}
+
+
 void INC_COMM(const MPI_Comm& comm) {
     for (const int participant : communicator_participants[COMM_NAME(comm)]) {
     ++partial_rank_chatter[{global_rank, participant}];
@@ -305,28 +321,6 @@ int MPI_Cart_create(MPI_Comm comm_old, int ndims, const int dims[], const int pe
 
 // fortran: todo, deduplicate init and finalise
 extern "C" {
-    void Fortran_PMPI_Comm_get_name(MPI_Comm c_comm, char* name, int* len) {
-        MPI_Fint f_comm = MPI_Comm_c2f(c_comm);
-        int ierror;
-        pmpi_comm_get_name_(&f_comm, name, len, &ierror, MPI_MAX_OBJECT_NAME);
-        name[*len] = '\0';
-    }
-
-    void Fortran_PMPI_Comm_set_name(MPI_Comm c_comm, const char* name) {
-        MPI_Fint f_comm = MPI_Comm_c2f(c_comm);
-        int ierror;
-        char f_name[MPI_MAX_OBJECT_NAME];
-        strncpy(f_name, name, MPI_MAX_OBJECT_NAME - 1);
-        f_name[MPI_MAX_OBJECT_NAME - 1] = '\0';
-        int len = strlen(f_name);
-        // todo: pad with what?
-        for(int i = len; i < MPI_MAX_OBJECT_NAME; ++i) {
-            f_name[i] = ' ';
-        }
-        pmpi_comm_set_name_(&f_comm, f_name, &ierror, MPI_MAX_OBJECT_NAME);
-    }
-
-
     void mpi_init_(int *ierror) {
         pmpi_init_(ierror);
         if (*ierror != MPI_SUCCESS) return;
@@ -337,10 +331,7 @@ extern "C" {
         pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
         pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
 
-        char world_rank_name[MPI_MAX_OBJECT_NAME];
-        int world_rank_name_length;
-        MPI_Comm_get_name(MPI_COMM_WORLD, world_rank_name, &world_rank_name_length);
-
+        std::string world_rank_name = COMM_NAME_F(f_comm_world);
         for (int i = 0; i < world_size; ++i) {
             communicator_participants[std::string(world_rank_name)].push_back(i);
         }
@@ -512,22 +503,23 @@ extern "C" {
         pmpi_comm_split_(comm, color, key, newcomm_f, ierror);
         if (*ierror != MPI_SUCCESS) return;
 
-        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
-        MPI_Comm c_newcomm = MPI_Comm_f2c(*newcomm_f);
-        if (c_newcomm == MPI_COMM_NULL) return;
-
-        char original_name[MPI_MAX_OBJECT_NAME];
-        int original_name_length;
-        MPI_Comm_get_name(c_comm, original_name, &original_name_length);
-
+        std::string original_name = COMM_NAME_F(*comm);
         int nsplits = ++split_count[std::string(original_name)];
         std::string new_comm_name = std::string(original_name) + " (split) (id=" + std::to_string(
             nsplits) + ") (colour=" + std::to_string(*color) + ")";
-        MPI_Comm_set_name(c_newcomm, new_comm_name.c_str());
+        pmpi_comm_set_name_(
+          newcomm_f,
+          const_cast<char *>(new_comm_name.c_str()),
+          ierror,
+          new_comm_name.length()
+        );
+        if (*ierror != MPI_SUCCESS) return;
 
-        int new_size, f_ierr;
+
+        int new_size;
         MPI_Fint f_newcomm = *newcomm_f;
-        pmpi_comm_size_(&f_newcomm, &new_size, &f_ierr);
+        pmpi_comm_size_(&f_newcomm, &new_size, ierror);
+        if (*ierror != MPI_SUCCESS) return;
 
         std::vector<int> world_ranks_array(new_size);
         int sendcount = 1, recvcount = 1;
@@ -535,7 +527,8 @@ extern "C" {
 
         pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
                         world_ranks_array.data(), &recvcount, &f_int_type,
-                        &f_newcomm, &f_ierr);
+                        &f_newcomm, ierror);
+        if (*ierror != MPI_SUCCESS) return;
 
         communicator_participants[new_comm_name] = world_ranks_array;
     }
@@ -544,21 +537,22 @@ extern "C" {
         pmpi_cart_create_(comm_old, ndims, dims, periods, reorder, comm_cart_f, ierror);
         if (*ierror != MPI_SUCCESS) return;
 
-        MPI_Comm c_comm_old = MPI_Comm_f2c(*comm_old);
-        MPI_Comm c_comm_cart = MPI_Comm_f2c(*comm_cart_f);
-        if (c_comm_cart == MPI_COMM_NULL) return;
-
-        char original_name[MPI_MAX_OBJECT_NAME];
-        int original_name_length;
-        MPI_Comm_get_name(c_comm_old, original_name, &original_name_length);
-
+        std::string original_name = COMM_NAME_F(*comm_old);
         int nsplits = ++split_count[std::string(original_name)];
         std::string new_comm_name = std::string(original_name) + " (cart) " + "(id=" + std::to_string(nsplits) + ")";
-        MPI_Comm_set_name(c_comm_cart, new_comm_name.c_str());
+        pmpi_comm_set_name_(
+          comm_cart_f,
+          const_cast<char *>(new_comm_name.c_str()),
+          ierror,
+          new_comm_name.length()
+        );
+        if (*ierror != MPI_SUCCESS) return;
 
-        int new_size, f_ierr;
+
+        int new_size;
         MPI_Fint f_cart_comm = *comm_cart_f;
-        pmpi_comm_size_(&f_cart_comm, &new_size, &f_ierr);
+        pmpi_comm_size_(&f_cart_comm, &new_size, ierror);
+        if (*ierror != MPI_SUCCESS) return;
 
         std::vector<int> world_ranks_array(new_size);
         int sendcount = 1, recvcount = 1;
@@ -566,7 +560,9 @@ extern "C" {
 
         pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
                         world_ranks_array.data(), &recvcount, &f_int_type,
-                        &f_cart_comm, &f_ierr);
+                        &f_cart_comm, ierror);
+        if (*ierror != MPI_SUCCESS) return;
+
 
         communicator_participants[new_comm_name] = world_ranks_array;
     }
@@ -574,19 +570,21 @@ extern "C" {
     void mpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror) {
         pmpi_comm_dup_(comm, newcomm_f, ierror);
 
-        MPI_Comm c_comm = MPI_Comm_f2c(*comm);
-        MPI_Comm c_newcomm = MPI_Comm_f2c(*newcomm_f);
-
-        char original_name[MPI_MAX_OBJECT_NAME];
-        int original_name_length;
-        MPI_Comm_get_name(c_comm, original_name, &original_name_length);
+        std::string original_name = COMM_NAME_F(*comm);
         int ndups = ++split_count[std::string(original_name)];
         std::string new_comm_name = std::string(original_name) + " (dup) (id=" + std::to_string(ndups) + ")";
-        MPI_Comm_set_name(c_newcomm, new_comm_name.c_str());
+        pmpi_comm_set_name_(
+          newcomm_f,
+          const_cast<char *>(new_comm_name.c_str()),
+          ierror,
+          new_comm_name.length()
+        );
+        if (*ierror != MPI_SUCCESS) return;
+        int new_size;
 
-        int new_size, f_ierr;
         MPI_Fint f_newcomm = *newcomm_f;
-        pmpi_comm_size_(&f_newcomm, &new_size, &f_ierr);
+        pmpi_comm_size_(&f_newcomm, &new_size, ierror);
+        if (*ierror != MPI_SUCCESS) return;
 
         std::vector<int> world_ranks_array(new_size);
         int sendcount = 1, recvcount = 1;
@@ -594,7 +592,8 @@ extern "C" {
 
         pmpi_allgather_(&global_rank, &sendcount, &f_int_type,
                         world_ranks_array.data(), &recvcount, &f_int_type,
-                        &f_newcomm, &f_ierr);
+                        &f_newcomm, ierror);
+        if (*ierror != MPI_SUCCESS) return;
 
         communicator_participants[new_comm_name] = world_ranks_array;
   }
