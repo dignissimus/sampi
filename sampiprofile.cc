@@ -36,14 +36,6 @@ void INC(int source, int dest) {
 }
 
 int MAP(const MPI_Comm& comm, int rank) {
-  // guard against case MPI_INIT not caught
-  if (
-    (communicator_participants.find(COMM_NAME(comm)) == communicator_participants.end() || communicator_participants[COMM_NAME(comm)].size() == 0)
-     && COMM_NAME(comm) == "MPI_COMM_WORLD"
-  ) {
-    return rank;
-  }
-
   return communicator_participants[COMM_NAME(comm)][rank];
 }
 
