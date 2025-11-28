@@ -151,6 +151,17 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
     return PMPI_Recv(buf, count, datatype, source, tag, comm, status);
 }
 
+
+int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype, int dest, int sendtag,
+                 void *recvbuf, int recvcount, MPI_Datatype recvtype, int source, int recvtag,
+                 MPI_Comm comm, MPI_Status *status) {
+
+    INC(global_rank, MAP(comm, dest));
+    return PMPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag,
+                         recvbuf, recvcount, recvtype, source, recvtag,
+                         comm, status);
+}
+
 int MPI_Isend(const void *buf, int count, MPI_Datatype datatype,
               int dest, int tag, MPI_Comm comm, MPI_Request *request) {
     INC(global_rank, MAP(comm, dest));
@@ -427,6 +438,19 @@ extern "C" {
 
         pmpi_recv_(buf, count, datatype, source, tag, comm, status_f, ierror);
     }
+
+  void mpi_sendrecv_(void *sendbuf, int *sendcount, MPI_Fint *sendtype, int *dest, int *sendtag,
+                   void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *source, int *recvtag,
+                   MPI_Fint *comm, MPI_Fint *status_f, int *ierror) {
+    MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+    INC(global_rank, MAP(c_comm, *dest));
+    pmpi_sendrecv_(
+      sendbuf, sendcount, sendtype, dest, sendtag,
+      recvbuf, recvcount, recvtype, source, recvtag,
+      comm, status_f, ierror
+    );
+  }
+
 
     void mpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
         MPI_Comm c_comm = MPI_Comm_f2c(*comm);

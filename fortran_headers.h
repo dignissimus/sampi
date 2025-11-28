@@ -4,6 +4,11 @@ extern "C" {
   void pmpi_finalize_(int *ierror);
   void pmpi_send_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror);
   void pmpi_recv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror);
+  void pmpi_sendrecv_(
+    void *sendbuf, int *sendcount, MPI_Fint *sendtype, int *dest, int *sendtag,
+    void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *source, int *recvtag,
+    MPI_Fint *comm, MPI_Fint *status_f, int *ierror
+  );
   void pmpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror);
   void pmpi_irecv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror);
   void pmpi_wait_(MPI_Fint *request_f, MPI_Fint *status_f, int *ierror);

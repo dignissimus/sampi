@@ -204,6 +204,16 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
     return PMPI_Recv(buf, count, datatype, source, tag, reorder(comm), status);
 }
 
+int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype, int dest, int sendtag,
+                 void *recvbuf, int recvcount, MPI_Datatype recvtype, int source, int recvtag,
+                 MPI_Comm comm, MPI_Status *status) {
+
+    return PMPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag,
+                         recvbuf, recvcount, recvtype, source, recvtag,
+                         reorder(comm), status);
+}
+
+
 int MPI_Isend(const void *buf, int count, MPI_Datatype datatype,
               int dest, int tag, MPI_Comm comm, MPI_Request *request) {
     // std::cout << "[HOOK] MPI_Isend -> dest=" << dest << ", tag=" << tag << std::endl;
@@ -373,6 +383,29 @@ extern "C" {
     void mpi_recv_(void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror) {
         MPI_Fint reordered_comm = reorder_comm_f(*comm);
         pmpi_recv_(buf, count, datatype, source, tag, &reordered_comm, status_f, ierror);
+    }
+
+    void mpi_sendrecv_(
+      void *sendbuf, int *sendcount, MPI_Fint *sendtype, int *dest, int *sendtag,
+      void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *source, int *recvtag,
+      MPI_Fint *comm, MPI_Fint *status_f, int *ierror
+    ) {
+      MPI_Fint reordered_comm = reorder_comm_f(*comm);
+      pmpi_sendrecv_(
+        sendbuf,
+        sendcount,
+        sendtype,
+        dest,
+        sendtag,
+        recvbuf,
+        recvcount,
+        recvtype,
+        source,
+        recvtag,
+        &reordered_comm,
+        status_f,
+        ierror
+      );
     }
 
     void mpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
