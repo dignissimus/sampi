@@ -13,7 +13,7 @@
 // TODO: Can replace with just a vector
 // Since I only record sends from this process
 static std::map<std::pair<int, int>, unsigned long long int>
-    partial_rank_chatter;
+    partial_rank_communication;
 static std::map<std::string, std::vector<int>> communicator_participants;
 std::map<std::string, int> split_count;
 static int global_rank;
@@ -32,22 +32,21 @@ std::string COMM_NAME_F(MPI_Fint f_comm) {
   int ierr = 0;
   pmpi_comm_get_name_(&f_comm, comm_name, &comm_name_length, &ierr,
                       MPI_MAX_OBJECT_NAME);
-  if (ierr == MPI_SUCCESS && comm_name_length > 0) {
-    return std::string(comm_name, comm_name_length);
-  } else {
+  if (ierr != MPI_SUCCESS || comm_name_length == 0) {
     std::cerr << "Unable to get name for Fortran communicator with id" << f_comm
               << std::endl;
+    return std::string("???");
   }
-  return std::string("???");
+  return std::string(comm_name, comm_name_length);
 }
 
 void INC_COMM(const MPI_Comm &comm) {
   for (const int participant : communicator_participants[COMM_NAME(comm)]) {
-    ++partial_rank_chatter[{global_rank, participant}];
+    ++partial_rank_communication[{global_rank, participant}];
   }
 }
 
-void INC(int source, int dest) { ++partial_rank_chatter[{source, dest}]; }
+void INC(int source, int dest) { ++partial_rank_communication[{source, dest}]; }
 
 int MAP(const MPI_Comm &comm, int rank) {
   return communicator_participants[COMM_NAME(comm)][rank];
@@ -75,15 +74,15 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
   return PMPI_Init_thread(argc, argv, required, provided);
 }
 
-void write_rank_chatter_to_file(
-    const std::vector<std::vector<unsigned long long int>> &all_rank_chatter) {
+void write_rank_communication_to_file(
+    const std::vector<std::vector<unsigned long long int>> &all_rank_communication) {
   std::ofstream outfile("sampi_communication_profile.txt");
   if (!outfile.is_open()) {
     std::cerr << "Error: Could not open output file sampi_communication_profile.txt" << std::endl;
     return;
   }
 
-  for (const auto &row : all_rank_chatter) {
+  for (const auto &row : all_rank_communication) {
     for (const auto &number : row) {
       outfile << number << ' ';
     }
@@ -100,13 +99,13 @@ int MPI_Finalize() {
   std::cout << "[PROFILE] MPI_Finalize called" << std::endl;
 
   if (global_rank == 0) {
-    std::vector<std::vector<unsigned long long int>> all_rank_chatter(
+    std::vector<std::vector<unsigned long long int>> all_rank_communication(
         global_world_size,
         std::vector<unsigned long long int>(global_world_size, 0));
 
     for (int i = 0; i < global_world_size; ++i) {
-      all_rank_chatter[0][i] = partial_rank_chatter[{0, i}];
-      all_rank_chatter[i][0] = partial_rank_chatter[{0, i}];
+      all_rank_communication[0][i] = partial_rank_communication[{0, i}];
+      all_rank_communication[i][0] = partial_rank_communication[{0, i}];
     }
 
     for (int i = 1; i < global_world_size; ++i) {
@@ -114,16 +113,16 @@ int MPI_Finalize() {
       MPI_Recv(rank_data.data(), global_world_size, MPI_LONG_LONG, i, 0,
                MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       for (int j = 0; j < global_world_size; ++j) {
-        all_rank_chatter[i][j] += rank_data[j];
-        all_rank_chatter[j][i] += rank_data[j];
+        all_rank_communication[i][j] += rank_data[j];
+        all_rank_communication[j][i] += rank_data[j];
       }
     }
 
-    write_rank_chatter_to_file(all_rank_chatter);
+    write_rank_communication_to_file(all_rank_communication);
   } else {
     std::vector<unsigned long long int> send_to_vector(global_world_size, 0);
     for (int i = 0; i < global_world_size; ++i) {
-      send_to_vector[i] = partial_rank_chatter[{global_rank, i}];
+      send_to_vector[i] = partial_rank_communication[{global_rank, i}];
     }
     MPI_Send(send_to_vector.data(), global_world_size, MPI_LONG_LONG, 0, 0,
              MPI_COMM_WORLD);
@@ -353,13 +352,13 @@ void mpi_finalize_(int *ierror) {
   int f_ierr;
 
   if (global_rank == 0) {
-    std::vector<std::vector<unsigned long long int>> all_rank_chatter(
+    std::vector<std::vector<unsigned long long int>> all_rank_communication(
         global_world_size,
         std::vector<unsigned long long int>(global_world_size, 0));
 
     for (int i = 0; i < global_world_size; ++i) {
-      all_rank_chatter[0][i] = partial_rank_chatter[{0, i}];
-      all_rank_chatter[i][0] = partial_rank_chatter[{0, i}];
+      all_rank_communication[0][i] = partial_rank_communication[{0, i}];
+      all_rank_communication[i][0] = partial_rank_communication[{0, i}];
     }
 
     for (int i = 1; i < global_world_size; ++i) {
@@ -371,15 +370,15 @@ void mpi_finalize_(int *ierror) {
                  &f_comm_world, (MPI_Fint *)MPI_F_STATUS_IGNORE, &f_ierr);
 
       for (int j = 0; j < global_world_size; ++j) {
-        all_rank_chatter[i][j] += rank_data[j];
-        all_rank_chatter[j][i] += rank_data[j];
+        all_rank_communication[i][j] += rank_data[j];
+        all_rank_communication[j][i] += rank_data[j];
       }
     }
-    write_rank_chatter_to_file(all_rank_chatter);
+    write_rank_communication_to_file(all_rank_communication);
   } else {
     std::vector<unsigned long long int> send_to_vector(global_world_size, 0);
     for (int i = 0; i < global_world_size; ++i) {
-      send_to_vector[i] = partial_rank_chatter[{global_rank, i}];
+      send_to_vector[i] = partial_rank_communication[{global_rank, i}];
     }
     int count = global_world_size;
     int dest = 0;
