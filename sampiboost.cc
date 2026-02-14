@@ -275,6 +275,36 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
                        recvtype, reorder(comm));
 }
 
+int MPI_Gatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                void *recvbuf, const int recvcounts[], const int displs[],
+                MPI_Datatype recvtype, int root, MPI_Comm comm) {
+  return PMPI_Gatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                      recvtype, root, reorder(comm));
+}
+
+int MPI_Scatterv(const void *sendbuf, const int sendcounts[],
+                 const int displs[], MPI_Datatype sendtype, void *recvbuf,
+                 int recvcount, MPI_Datatype recvtype, int root,
+                 MPI_Comm comm) {
+  return PMPI_Scatterv(sendbuf, sendcounts, displs, sendtype, recvbuf,
+                       recvcount, recvtype, root, reorder(comm));
+}
+
+int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                   void *recvbuf, const int recvcounts[], const int displs[],
+                   MPI_Datatype recvtype, MPI_Comm comm) {
+  return PMPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts,
+                         displs, recvtype, reorder(comm));
+}
+
+int MPI_Alltoallv(const void *sendbuf, const int sendcounts[],
+                  const int sdispls[], MPI_Datatype sendtype, void *recvbuf,
+                  const int recvcounts[], const int rdispls[],
+                  MPI_Datatype recvtype, MPI_Comm comm) {
+  return PMPI_Alltoallv(sendbuf, sendcounts, sdispls, sendtype, recvbuf,
+                        recvcounts, rdispls, recvtype, reorder(comm));
+}
+
 int MPI_Barrier(MPI_Comm comm) {
   return PMPI_Barrier(reorder(comm));
 }
@@ -453,6 +483,39 @@ void mpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
   MPI_Fint reordered_comm = reorder_comm_f(*comm);
   pmpi_alltoall_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype,
                  &reordered_comm, ierror);
+}
+
+void mpi_gatherv_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+                  void *recvbuf, int *recvcounts, int *displs, MPI_Fint *recvtype,
+                  int *root, MPI_Fint *comm, int *ierror) {
+  MPI_Fint reordered_comm = reorder_comm_f(*comm);
+  pmpi_gatherv_(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                recvtype, root, &reordered_comm, ierror);
+}
+
+void mpi_scatterv_(const void *sendbuf, int *sendcounts, int *displs,
+                   MPI_Fint *sendtype, void *recvbuf, int *recvcount,
+                   MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+  MPI_Fint reordered_comm = reorder_comm_f(*comm);
+  pmpi_scatterv_(sendbuf, sendcounts, displs, sendtype, recvbuf, recvcount,
+                 recvtype, root, &reordered_comm, ierror);
+}
+
+void mpi_allgatherv_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+                     void *recvbuf, int *recvcounts, int *displs,
+                     MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+  MPI_Fint reordered_comm = reorder_comm_f(*comm);
+  pmpi_allgatherv_(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                   recvtype, &reordered_comm, ierror);
+}
+
+void mpi_alltoallv_(const void *sendbuf, int *sendcounts, int *sdispls,
+                    MPI_Fint *sendtype, void *recvbuf, int *recvcounts,
+                    int *rdispls, MPI_Fint *recvtype, MPI_Fint *comm,
+                    int *ierror) {
+  MPI_Fint reordered_comm = reorder_comm_f(*comm);
+  pmpi_alltoallv_(sendbuf, sendcounts, sdispls, sendtype, recvbuf, recvcounts,
+                  rdispls, recvtype, &reordered_comm, ierror);
 }
 
 void mpi_barrier_(MPI_Fint *comm, int *ierror) {

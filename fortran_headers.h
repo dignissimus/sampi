@@ -30,4 +30,24 @@ extern "C" {
   void pmpi_comm_set_name_(MPI_Fint *comm, char *name, int *ierror, int name_len);
   void pmpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror);
   void pmpi_comm_free_(MPI_Fint *comm, int *ierror);
+  void pmpi_gatherv_(
+      const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+      void *recvbuf, int *recvcounts, int *displs, MPI_Fint *recvtype,
+      int *root, MPI_Fint *comm, int *ierror
+  );
+  void pmpi_scatterv_(
+      const void *sendbuf, int *sendcounts, int *displs, MPI_Fint *sendtype,
+      void *recvbuf, int *recvcount, MPI_Fint *recvtype,
+      int *root, MPI_Fint *comm, int *ierror
+  );
+  void pmpi_allgatherv_(
+      const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+      void *recvbuf, int *recvcounts, int *displs, MPI_Fint *recvtype,
+      MPI_Fint *comm, int *ierror
+  );
+  void pmpi_alltoallv_(
+      const void *sendbuf, int *sendcounts, int *sdispls, MPI_Fint *sendtype,
+      void *recvbuf, int *recvcounts, int *rdispls, MPI_Fint *recvtype,
+      MPI_Fint *comm, int *ierror
+  );
 }

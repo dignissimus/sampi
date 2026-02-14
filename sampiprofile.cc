@@ -227,6 +227,40 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
                        recvtype, comm);
 }
 
+int MPI_Gatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                void *recvbuf, const int recvcounts[], const int displs[],
+                MPI_Datatype recvtype, int root, MPI_Comm comm) {
+  INC_COMM(comm);
+  return PMPI_Gatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                      recvtype, root, comm);
+}
+
+int MPI_Scatterv(const void *sendbuf, const int sendcounts[],
+                 const int displs[], MPI_Datatype sendtype, void *recvbuf,
+                 int recvcount, MPI_Datatype recvtype, int root,
+                 MPI_Comm comm) {
+  INC_COMM(comm);
+  return PMPI_Scatterv(sendbuf, sendcounts, displs, sendtype, recvbuf,
+                       recvcount, recvtype, root, comm);
+}
+
+int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                   void *recvbuf, const int recvcounts[], const int displs[],
+                   MPI_Datatype recvtype, MPI_Comm comm) {
+  INC_COMM(comm);
+  return PMPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts,
+                         displs, recvtype, comm);
+}
+
+int MPI_Alltoallv(const void *sendbuf, const int sendcounts[],
+                  const int sdispls[], MPI_Datatype sendtype, void *recvbuf,
+                  const int recvcounts[], const int rdispls[],
+                  MPI_Datatype recvtype, MPI_Comm comm) {
+  INC_COMM(comm);
+  return PMPI_Alltoallv(sendbuf, sendcounts, sdispls, sendtype, recvbuf,
+                        recvcounts, rdispls, recvtype, comm);
+}
+
 int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm) {
   int result = PMPI_Comm_split(comm, color, key, newcomm);
 
@@ -490,6 +524,43 @@ void mpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
   INC_COMM(c_comm);
   pmpi_alltoall_(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype,
                  comm, ierror);
+}
+
+void mpi_gatherv_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+                  void *recvbuf, int *recvcounts, int *displs, MPI_Fint *recvtype,
+                  int *root, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  INC_COMM(c_comm);
+  pmpi_gatherv_(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                recvtype, root, comm, ierror);
+}
+
+void mpi_scatterv_(const void *sendbuf, int *sendcounts, int *displs,
+                   MPI_Fint *sendtype, void *recvbuf, int *recvcount,
+                   MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  INC_COMM(c_comm);
+  pmpi_scatterv_(sendbuf, sendcounts, displs, sendtype, recvbuf, recvcount,
+                 recvtype, root, comm, ierror);
+}
+
+void mpi_allgatherv_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
+                     void *recvbuf, int *recvcounts, int *displs,
+                     MPI_Fint *recvtype, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  INC_COMM(c_comm);
+  pmpi_allgatherv_(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
+                   recvtype, comm, ierror);
+}
+
+void mpi_alltoallv_(const void *sendbuf, int *sendcounts, int *sdispls,
+                    MPI_Fint *sendtype, void *recvbuf, int *recvcounts,
+                    int *rdispls, MPI_Fint *recvtype, MPI_Fint *comm,
+                    int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  INC_COMM(c_comm);
+  pmpi_alltoallv_(sendbuf, sendcounts, sdispls, sendtype, recvbuf, recvcounts,
+                  rdispls, recvtype, comm, ierror);
 }
 
 void mpi_comm_split_(MPI_Fint *comm, int *color, int *key, MPI_Fint *newcomm_f,
