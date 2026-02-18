@@ -7,19 +7,33 @@
 #include <mpi.h>
 #include <numeric>
 #include <sstream>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 static MPI_Comm reorder_comm_world = MPI_COMM_NULL;
 static std::vector<int> rank_map;
-static std::map<std::pair<int, int>, double> latency_map;
+struct PairHash {
+  template <class T1, class T2>
+  size_t operator()(const std::pair<T1, T2> &p) const {
+    auto h1 = std::hash<T1>{}(p.first);
+    auto h2 = std::hash<T2>{}(p.second);
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
+};
+
+using LatencyMapType =
+    std::unordered_map<std::pair<int, int>, double, PairHash>;
+using RankCommMapType = std::unordered_map<std::pair<int, int>, int, PairHash>;
+// todo: shouldn't be global
+static LatencyMapType latency_map(0, PairHash{});
 static int global_rank;
 #define reorder(comm) (comm == MPI_COMM_WORLD ? reorder_comm_world : comm)
 
-static double
-compute_cost(const std::vector<int> &mapping,
-             const std::map<std::pair<int, int>, double> &latency_map,
-             const std::map<std::pair<int, int>, int> &rank_comm, int size) {
+// rename mapping, not clear that it's physical rank -> profiling rank
+static double compute_cost(const std::vector<int> &mapping,
+                           const LatencyMapType &latency_map,
+                           const RankCommMapType &rank_comm, int size) {
   double cost = 0.0;
   for (int i = 0; i < size; ++i) {
     for (int j = 0; j < size; ++j) {
@@ -36,10 +50,38 @@ compute_cost(const std::vector<int> &mapping,
   return cost;
 }
 
-std::vector<int>
-compute_rank_map(int size,
-                 const std::map<std::pair<int, int>, double> &latency_map,
-                 const std::map<std::pair<int, int>, int> &rank_comm) {
+// todo: Probably have cost as a struct that has an update method
+static double update_cost(const std::vector<int> &mapping,
+                          const LatencyMapType &latency_map,
+                          const RankCommMapType &rank_comm, int size, int si,
+                          int sj, int original_cost) {
+  double cost_difference = 0.0;
+  for (int x = 0; x < size; ++x) {
+    // todo: code unclear
+    // this is to prevent double counting
+    if (x == si || x == sj)
+      continue;
+    int px = mapping[x];
+    int pi = mapping[si];
+    int pj = mapping[sj];
+    auto comm_it = rank_comm.find({pi, px});
+    if (comm_it != rank_comm.end() && pi != px) {
+      auto communication_weight = comm_it->second;
+      cost_difference -= 2 * communication_weight * latency_map.at({si, x});
+      cost_difference += 2 * communication_weight * latency_map.at({sj, x});
+    }
+    comm_it = rank_comm.find({pj, px});
+    if (comm_it != rank_comm.end() && pj != px) {
+      auto communication_weight = comm_it->second;
+      cost_difference -= 2 * communication_weight * latency_map.at({sj, x});
+      cost_difference += 2 * communication_weight * latency_map.at({si, x});
+    }
+  }
+  return original_cost + cost_difference;
+}
+
+std::vector<int> compute_rank_map(int size, const LatencyMapType &latency_map,
+                                  const RankCommMapType &rank_comm) {
   std::vector<int> mapping(size);
   std::iota(mapping.begin(), mapping.end(), 0);
 
@@ -70,9 +112,50 @@ compute_rank_map(int size,
   return mapping;
 }
 
-std::map<std::pair<int, int>, int>
-read_communication_profile(const std::string &filename, int world_size) {
-  std::map<std::pair<int, int>, int> rank_comm;
+std::vector<int> compute_rank_map_tree(int size,
+                                       const LatencyMapType &latency_map,
+                                       const RankCommMapType &rank_comm) {
+  std::vector<int> mapping(size);
+  std::iota(mapping.begin(), mapping.end(), 0);
+
+  double best_cost = compute_cost(mapping, latency_map, rank_comm, size);
+  bool improved = true;
+
+  int rank{};
+  PMPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  std::cout << "start 2opt" << std::endl;
+  // 2 opt
+  while (improved) {
+    improved = false;
+    for (int i = 0; i < size; ++i) {
+      for (int j = i + 1; j < size; ++j) {
+        double new_cost =
+            update_cost(mapping, latency_map, rank_comm, size, i, j, best_cost);
+        std::swap(mapping[i], mapping[j]);
+        if (new_cost < best_cost) {
+          if (rank == 0)
+            std::cout << "improved: " << best_cost << " to " << new_cost
+                      << std::endl;
+          best_cost = new_cost;
+          improved = true;
+        } else {
+          std::swap(mapping[i], mapping[j]);
+        }
+      }
+    }
+
+    if (!improved)
+      break;
+  }
+  std::cout << "finished 2opt" << std::endl;
+
+  return mapping;
+}
+
+RankCommMapType read_communication_profile(const std::string &filename,
+                                           int world_size) {
+  RankCommMapType rank_comm(0, PairHash{});
 
   std::ifstream file(filename);
   if (!file.is_open()) {
@@ -98,7 +181,12 @@ read_communication_profile(const std::string &filename, int world_size) {
   return rank_comm;
 }
 
-std::map<std::pair<int, int>, double> compute_latency_map() {
+// todo: the problem with 2opt is it makes miniscule improvements
+// then doesn't converge
+// so, stop after improvements become small
+// or granularise latencies
+// I'm looking at replacing 2opt anyway
+LatencyMapType compute_latency_map() {
   int world_rank, world_size;
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -164,7 +252,7 @@ int get_socket_id() {
 }
 
 //
-std::map<std::pair<int, int>, double> compute_latency_map_tree() {
+LatencyMapType compute_latency_map_tree() {
   int world_rank, world_size;
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -189,8 +277,6 @@ std::map<std::pair<int, int>, double> compute_latency_map_tree() {
   PMPI_Allgather(&world_rank, 1, MPI_INT, socket_ranks.data(), 1, MPI_INT,
                  socket_comm);
 
-  std::map<std::pair<int, int>, double> latency_map{};
-
   // Arbitrary rank
   for (int i = 0; i < world_size; ++i) {
     latency_map[{i, world_rank}] = 4;
@@ -214,6 +300,9 @@ std::map<std::pair<int, int>, double> compute_latency_map_tree() {
   for (int i = 0; i < world_size; ++i) {
     for (int j = i + 1; j < world_size; ++j) {
       double latency;
+      if (world_rank == i) {
+        latency = latency_map[{i, j}];
+      }
       PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
       latency_map[{i, j}] = latency;
       latency_map[{j, i}] = latency;
@@ -280,7 +369,7 @@ struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
 
     auto rank_comm = read_communication_profile(
         "sampi_communication_profile.txt", world_size);
-    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
   }
@@ -293,11 +382,11 @@ struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
     pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
 
     global_rank = world_rank;
-    latency_map = compute_latency_map();
+    latency_map = compute_latency_map_tree();
 
     auto rank_comm = read_communication_profile(
         "sampi_communication_profile.txt", world_size);
-    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
   }
