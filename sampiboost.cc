@@ -87,16 +87,16 @@ static double update_cost(const std::vector<int> &mapping,
 
     double communication_cost_forward = rank_comm.at({pi, px});
     double communication_cost_backward = rank_comm.at({px, pi});
-    cost_difference -= communication_cost_forward * latency_map.at({si, x});
+    cost_difference += communication_cost_forward * latency_map.at({si, x});
     if(x != si) {
-      cost_difference -= communication_cost_backward * latency_map.at({x, si});
+      cost_difference += communication_cost_backward * latency_map.at({x, si});
     }
 
     communication_cost_forward = rank_comm.at({pj, px});
     communication_cost_backward = rank_comm.at({px, pj});
-    cost_difference -= communication_cost_forward * latency_map.at({sj, x});
+    cost_difference += communication_cost_forward * latency_map.at({sj, x});
     if(x != sj) {
-      cost_difference -= communication_cost_backward * latency_map.at({x, sj});
+      cost_difference += communication_cost_backward * latency_map.at({x, sj});
     }
 
   }
@@ -147,7 +147,7 @@ std::vector<int> compute_rank_map_tree(int size,
   int rank{};
   PMPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  std::cout << "start 2opt" << std::endl;
+  std::cout << "start 2opt, start cost: " << best_cost << std::endl;
   // 2 opt
   while (improved) {
     improved = false;
@@ -155,15 +155,14 @@ std::vector<int> compute_rank_map_tree(int size,
       for (int j = i + 1; j < size; ++j) {
         double new_cost =
             update_cost(mapping, latency_map, rank_comm, size, i, j, best_cost);
-        std::swap(mapping[i], mapping[j]);
         if (new_cost < best_cost) {
-          if (rank == 0)
+          if (rank == 0) {
             std::cout << "improved: " << best_cost << " to " << new_cost
                       << std::endl;
+          }
           best_cost = new_cost;
-          improved = true;
-        } else {
           std::swap(mapping[i], mapping[j]);
+          improved = true;
         }
       }
     }
