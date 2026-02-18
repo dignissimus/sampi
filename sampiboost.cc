@@ -51,31 +51,54 @@ static double compute_cost(const std::vector<int> &mapping,
 }
 
 // todo: Probably have cost as a struct that has an update method
+// todo: variable names
 static double update_cost(const std::vector<int> &mapping,
                           const LatencyMapType &latency_map,
                           const RankCommMapType &rank_comm, int size, int si,
                           int sj, int original_cost) {
   double cost_difference = 0.0;
+
+  int pi = mapping[si];
+  int pj = mapping[sj];
+
   for (int x = 0; x < size; ++x) {
-    // todo: code unclear
-    // this is to prevent double counting
-    if (x == si || x == sj)
-      continue;
-    int px = mapping[x];
-    int pi = mapping[si];
-    int pj = mapping[sj];
-    auto comm_it = rank_comm.find({pi, px});
-    if (comm_it != rank_comm.end() && pi != px) {
-      auto communication_weight = comm_it->second;
-      cost_difference -= 2 * communication_weight * latency_map.at({si, x});
-      cost_difference += 2 * communication_weight * latency_map.at({sj, x});
+    auto px = mapping[x];
+
+    double communication_cost_forward = rank_comm.at({pi, px});
+    double communication_cost_backward = rank_comm.at({px, pi});
+    cost_difference -= communication_cost_forward * latency_map.at({si, x});
+    if(x != si) {
+      cost_difference -= communication_cost_backward * latency_map.at({x, si});
     }
-    comm_it = rank_comm.find({pj, px});
-    if (comm_it != rank_comm.end() && pj != px) {
-      auto communication_weight = comm_it->second;
-      cost_difference -= 2 * communication_weight * latency_map.at({sj, x});
-      cost_difference += 2 * communication_weight * latency_map.at({si, x});
+
+    communication_cost_forward = rank_comm.at({pj, px});
+    communication_cost_backward = rank_comm.at({px, pj});
+    cost_difference -= communication_cost_forward * latency_map.at({sj, x});
+    if(x != sj) {
+      cost_difference -= communication_cost_backward * latency_map.at({x, sj});
     }
+
+  }
+
+  for (int x = 0; x < size; ++x) {
+    auto px = mapping[x];
+    pi = mapping[sj];
+    pj = mapping[si];
+
+    double communication_cost_forward = rank_comm.at({pi, px});
+    double communication_cost_backward = rank_comm.at({px, pi});
+    cost_difference -= communication_cost_forward * latency_map.at({si, x});
+    if(x != si) {
+      cost_difference -= communication_cost_backward * latency_map.at({x, si});
+    }
+
+    communication_cost_forward = rank_comm.at({pj, px});
+    communication_cost_backward = rank_comm.at({px, pj});
+    cost_difference -= communication_cost_forward * latency_map.at({sj, x});
+    if(x != sj) {
+      cost_difference -= communication_cost_backward * latency_map.at({x, sj});
+    }
+
   }
   return original_cost + cost_difference;
 }
@@ -144,9 +167,6 @@ std::vector<int> compute_rank_map_tree(int size,
         }
       }
     }
-
-    if (!improved)
-      break;
   }
   std::cout << "finished 2opt" << std::endl;
 
@@ -290,7 +310,7 @@ LatencyMapType compute_latency_map_tree() {
   }
 
   // Same socket
-  for (int rank : node_ranks) {
+  for (int rank : socket_ranks) {
     latency_map[{rank, world_rank}] = 1;
     latency_map[{world_rank, rank}] = 1;
   }
