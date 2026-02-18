@@ -315,10 +315,13 @@ LatencyMapType compute_latency_map_tree() {
     latency_map[{world_rank, rank}] = 1;
   }
 
+  // Same core
+  latency_map[{world_rank, world_rank}] = 0;
+
   // todo: does it really make sense to 1) store the latency map explicitly
   // 2) make every rank aware of the latency map
   for (int i = 0; i < world_size; ++i) {
-    for (int j = i + 1; j < world_size; ++j) {
+    for (int j = i; j < world_size; ++j) {
       double latency;
       if (world_rank == i) {
         latency = latency_map[{i, j}];
