@@ -1,3 +1,5 @@
+#include <mpi.h>
+
 extern "C" {
   void pmpi_init_(int *ierror);
   void pmpi_init_thread_(int *required, int *provided, int *ierror);

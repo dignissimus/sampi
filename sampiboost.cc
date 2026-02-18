@@ -147,6 +147,82 @@ std::map<std::pair<int, int>, double> compute_latency_map() {
   return latency_map;
 }
 
+// todo: replace with hwloc
+int get_socket_id() {
+  int cpu_id = sched_getcpu();
+  char path[256];
+  snprintf(path, sizeof(path),
+           "/sys/devices/system/cpu/cpu%d/topology/physical_package_id",
+           cpu_id);
+  FILE *file = fopen(path, "r");
+  if (!file)
+    throw "couldn't find socket id";
+  int socket_id;
+  fscanf(file, "%d", &socket_id);
+  fclose(file);
+  return socket_id;
+}
+
+//
+std::map<std::pair<int, int>, double> compute_latency_map_tree() {
+  int world_rank, world_size;
+  PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+  MPI_Comm node_comm;
+  PMPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, world_rank,
+                       MPI_INFO_NULL, &node_comm);
+
+  int node_comm_size{};
+  PMPI_Comm_size(node_comm, &node_comm_size);
+  std::vector<int> node_ranks(node_comm_size);
+  PMPI_Allgather(&world_rank, 1, MPI_INT, node_ranks.data(), 1, MPI_INT,
+                 node_comm);
+
+  int socket_id = get_socket_id();
+  MPI_Comm socket_comm;
+  MPI_Comm_split(node_comm, socket_id, 0, &socket_comm);
+
+  int socket_comm_size{};
+  PMPI_Comm_size(socket_comm, &socket_comm_size);
+  std::vector<int> socket_ranks(socket_comm_size);
+  PMPI_Allgather(&world_rank, 1, MPI_INT, socket_ranks.data(), 1, MPI_INT,
+                 socket_comm);
+
+  std::map<std::pair<int, int>, double> latency_map{};
+
+  // Arbitrary rank
+  for (int i = 0; i < world_size; ++i) {
+    latency_map[{i, world_rank}] = 4;
+    latency_map[{world_rank, i}] = 4;
+  }
+
+  // Same node
+  for (int rank : node_ranks) {
+    latency_map[{rank, world_rank}] = 2;
+    latency_map[{world_rank, rank}] = 2;
+  }
+
+  // Same socket
+  for (int rank : node_ranks) {
+    latency_map[{rank, world_rank}] = 1;
+    latency_map[{world_rank, rank}] = 1;
+  }
+
+  // todo: does it really make sense to 1) store the latency map explicitly
+  // 2) make every rank aware of the latency map
+  for (int i = 0; i < world_size; ++i) {
+    for (int j = i + 1; j < world_size; ++j) {
+      double latency;
+      PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
+      latency_map[{i, j}] = latency;
+      latency_map[{j, i}] = latency;
+    }
+  }
+
+  return latency_map;
+}
+
 // I'm using Rankparticipant to store strategies for computing rank placements
 // I probably want to rename this
 template <typename Derived> struct RankParticipant {
@@ -189,7 +265,45 @@ struct Pt2PtRankParticipant : RankParticipant<Pt2PtRankParticipant> {
   }
 };
 
-static auto rank_participant = Pt2PtRankParticipant{};
+// todo: same crtp concern as above
+// todo: probably want to refactor, the two strategies only differ in how they
+// calculate the cost matrix So might want to use composition one component gets
+// the cost matrix one component computes the rank placement
+struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
+  /// requires PMPI_init called
+  int get_new_rank_c() {
+    int world_rank, world_size;
+    PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    global_rank = world_rank;
+    latency_map = compute_latency_map_tree();
+
+    auto rank_comm = read_communication_profile(
+        "sampi_communication_profile.txt", world_size);
+    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    int new_rank = rank_map[world_rank];
+    return new_rank;
+  }
+
+  int get_new_rank_fortran() {
+    // todo: check errors
+    int world_rank, world_size, ierr;
+    MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+    pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
+    pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+
+    global_rank = world_rank;
+    latency_map = compute_latency_map();
+
+    auto rank_comm = read_communication_profile(
+        "sampi_communication_profile.txt", world_size);
+    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    int new_rank = rank_map[world_rank];
+    return new_rank;
+  }
+};
+
+static auto rank_participant = TreeMapRankParticipant{};
 
 int MPI_Init(int *argc, char ***argv) {
   std::cout << "[ALARM] MPI_Init called" << std::endl;
