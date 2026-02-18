@@ -1,3 +1,4 @@
+#include "fortran_headers.h"
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -8,7 +9,6 @@
 #include <sstream>
 #include <utility>
 #include <vector>
-#include "fortran_headers.h"
 
 static MPI_Comm reorder_comm_world = MPI_COMM_NULL;
 static std::vector<int> rank_map;
@@ -147,27 +147,57 @@ std::map<std::pair<int, int>, double> compute_latency_map() {
   return latency_map;
 }
 
+// I'm using Rankparticipant to store strategies for computing rank placements
+// I probably want to rename this
+template <typename Derived> struct RankParticipant {
+  int get_new_rank_c();
+  int get_new_rank_fortran();
+};
+
+// todo: do I even need/want crtp
+struct Pt2PtRankParticipant : RankParticipant<Pt2PtRankParticipant> {
+  /// requires PMPI_init called
+  int get_new_rank_c() {
+    int world_rank, world_size;
+    PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    global_rank = world_rank;
+    latency_map = compute_latency_map();
+
+    auto rank_comm = read_communication_profile(
+        "sampi_communication_profile.txt", world_size);
+    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    int new_rank = rank_map[world_rank];
+    return new_rank;
+  }
+
+  int get_new_rank_fortran() {
+    // todo: check errors
+    int world_rank, world_size, ierr;
+    MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+    pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
+    pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+
+    global_rank = world_rank;
+    latency_map = compute_latency_map();
+
+    auto rank_comm = read_communication_profile(
+        "sampi_communication_profile.txt", world_size);
+    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
+    int new_rank = rank_map[world_rank];
+    return new_rank;
+  }
+};
+
+static auto rank_participant = Pt2PtRankParticipant{};
+
 int MPI_Init(int *argc, char ***argv) {
   std::cout << "[ALARM] MPI_Init called" << std::endl;
   int return_value = PMPI_Init(argc, argv);
-
-  int world_rank, world_size;
-  PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-  PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-  global_rank = world_rank;
-
-  latency_map = compute_latency_map();
-
-  auto rank_comm =
-      read_communication_profile("sampi_communication_profile.txt", world_size);
-  rank_map = compute_rank_map(world_size, latency_map, rank_comm);
-  int new_rank = rank_map[world_rank];
-  PMPI_Comm_split(MPI_COMM_WORLD, 0, new_rank, &reorder_comm_world);
-  int reorder_rank, reorder_size;
-  PMPI_Comm_rank(reorder_comm_world, &reorder_rank);
-  PMPI_Comm_size(reorder_comm_world, &reorder_size);
-  std::cout << "[ALARM] Re-ordered ranks" << std::endl;
+  // todo: check return value
+  int new_rank = rank_participant.get_new_rank_c();
+  int err = PMPI_Comm_split(MPI_COMM_WORLD, 0, new_rank, &reorder_comm_world);
+  // todo: check err value
   return return_value;
 }
 
@@ -305,9 +335,7 @@ int MPI_Alltoallv(const void *sendbuf, const int sendcounts[],
                         recvcounts, rdispls, recvtype, reorder(comm));
 }
 
-int MPI_Barrier(MPI_Comm comm) {
-  return PMPI_Barrier(reorder(comm));
-}
+int MPI_Barrier(MPI_Comm comm) { return PMPI_Barrier(reorder(comm)); }
 
 int MPI_Comm_rank(MPI_Comm comm, int *rank) {
   int ret = PMPI_Comm_rank(reorder(comm), rank);
@@ -341,31 +369,14 @@ void mpi_init_(int *ierror) {
   if (*ierror != MPI_SUCCESS)
     return;
 
-  int world_rank, world_size, ierr;
-  MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
-
-  pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
-  pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
-
-  global_rank = world_rank;
-
-  latency_map = compute_latency_map();
-
-  auto rank_comm =
-      read_communication_profile("sampi_communication_profile.txt", world_size);
-  rank_map = compute_rank_map(world_size, latency_map, rank_comm);
-  int new_rank = rank_map[world_rank];
-
+  int new_rank = rank_participant.get_new_rank_fortran();
   MPI_Fint f_new_comm;
-  int color = 0;
-  pmpi_comm_split_(&f_comm_world, &color, &new_rank, &f_new_comm, &ierr);
+  int colour = 0;
+  int ierr;
+  MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+  pmpi_comm_split_(&f_comm_world, &colour, &new_rank, &f_new_comm, &ierr);
+  // todo: check error value
   reorder_comm_world = MPI_Comm_f2c(f_new_comm);
-
-  int reorder_rank, reorder_size;
-  pmpi_comm_rank_(&f_new_comm, &reorder_rank, &ierr);
-  pmpi_comm_size_(&f_new_comm, &reorder_size, &ierr);
-
-  std::cout << "[ALARM] MPI_Init called" << std::endl;
 }
 
 // todo: need to reorder in init thread
@@ -486,8 +497,8 @@ void mpi_alltoall_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
 }
 
 void mpi_gatherv_(const void *sendbuf, int *sendcount, MPI_Fint *sendtype,
-                  void *recvbuf, int *recvcounts, int *displs, MPI_Fint *recvtype,
-                  int *root, MPI_Fint *comm, int *ierror) {
+                  void *recvbuf, int *recvcounts, int *displs,
+                  MPI_Fint *recvtype, int *root, MPI_Fint *comm, int *ierror) {
   MPI_Fint reordered_comm = reorder_comm_f(*comm);
   pmpi_gatherv_(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs,
                 recvtype, root, &reordered_comm, ierror);
