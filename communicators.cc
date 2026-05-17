@@ -1,4 +1,6 @@
 #include "communicators.h"
+#include <string>
+#include <iostream>
 
 std::string get_communicator_name(const MPI_Comm &comm) {
   char comm_name[MPI_MAX_OBJECT_NAME];

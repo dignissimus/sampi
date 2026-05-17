@@ -10,7 +10,7 @@ find_package(MPI REQUIRED)
 set(COMMON_FLAGS "-Wall -Wextra -fPIC -D_GNU_SOURCE")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS}")
 
-add_library(sampiprofile SHARED sampiprofile.cc)
+add_library(sampiprofile SHARED sampiprofile.cc communicators.cc)
 target_include_directories(sampiprofile PRIVATE ${MPI_INCLUDE_PATH})
 target_link_libraries(sampiprofile ${MPI_CXX_LIBRARIES})
 
