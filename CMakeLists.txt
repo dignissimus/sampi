@@ -14,7 +14,7 @@ add_library(sampiprofile SHARED sampiprofile.cc communicators.cc)
 target_include_directories(sampiprofile PRIVATE ${MPI_INCLUDE_PATH})
 target_link_libraries(sampiprofile ${MPI_CXX_LIBRARIES})
 
-add_library(sampiboost SHARED sampiboost.cc)
+add_library(sampiboost SHARED sampiboost.cc rank_reorder.h rank_placement.h)
 target_include_directories(sampiboost PRIVATE ${MPI_INCLUDE_PATH})
 target_link_libraries(sampiboost ${MPI_CXX_LIBRARIES})
 
