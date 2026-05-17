@@ -15,7 +15,6 @@
 struct ReorderConfig {
   std::string profile_filepath = "sampi_communication_profile.txt";
 
-  // For the point-to-point cost model
   int ping_pong_count = 50;
   int ping_pong_tag = 999;
   int ping_pong_msg_size = 8;
@@ -50,20 +49,28 @@ static int global_rank;
 // rename mapping, not clear that it's physical rank -> profiling rank
 static double compute_cost(const std::vector<int> &mapping,
                            const LatencyMapType &latency_map,
-                           RankCommMapType &rank_comm,
-                           int size) { // TODO: const ref for rank_comm
+                           const RankCommMapType &rank_comm, int size) {
   double cost = 0.0;
   for (int i = 0; i < size; ++i) {
     for (int j = 0; j < i; ++j) {
       int pi = mapping[i];
       int pj = mapping[j];
-      auto forwards_comm = rank_comm[{pi, pj}];
-      auto backwards_comm = rank_comm[{pj, pi}];
+
+      int forwards_comm = 0, backwards_comm = 0;
+      auto it_fwd = rank_comm.find({pi, pj});
+      if (it_fwd != rank_comm.end())
+        forwards_comm = it_fwd->second;
+
+      auto it_bwd = rank_comm.find({pj, pi});
+      if (it_bwd != rank_comm.end())
+        backwards_comm = it_bwd->second;
+
       auto total_comm = forwards_comm + backwards_comm;
 
       auto forwards_latency = latency_map.at({i, j});
       auto backwards_latency = latency_map.at({j, i});
       auto total_latency = forwards_latency + backwards_latency;
+
       cost += total_comm * total_latency;
     }
   }
@@ -72,50 +79,42 @@ static double compute_cost(const std::vector<int> &mapping,
 
 // todo: Probably have cost as a struct that has an update method
 // todo: variable names
-static double
-update_cost(const std::vector<int> &mapping, const LatencyMapType &latency_map,
-            RankCommMapType &rank_comm, int size,
-            int si, // TODO: probbaly want rank_comm as const reference. kept
-                    // like this for autovivification
-            int sj, int original_cost) {
+static double update_cost(const std::vector<int> &mapping,
+                          const LatencyMapType &latency_map,
+                          const RankCommMapType &rank_comm, int size, int si,
+                          int sj, double original_cost) {
   double cost_difference = 0.0;
 
   int pi = mapping[si];
   int pj = mapping[sj];
 
+  auto get_comm = [&](int src, int dst) {
+    auto it = rank_comm.find({src, dst});
+    return it != rank_comm.end() ? it->second : 0;
+  };
+
   for (int sx = 0; sx < size; ++sx) {
+    if (sx == si || sx == sj) {
+      continue;
+    }
+
     int px = mapping[sx];
-    auto forwards_comm_i = rank_comm[{px, pi}];
-    auto backwards_comm_i = rank_comm[{pi, px}];
-    auto total_comm_i = forwards_comm_i + backwards_comm_i;
 
-    auto forwards_comm_j = rank_comm[{px, pj}];
-    auto backwards_comm_j = rank_comm[{pj, px}];
-    auto total_comm_j = forwards_comm_j + backwards_comm_j;
+    auto total_comm_i = get_comm(px, pi) + get_comm(pi, px);
+    auto total_comm_j = get_comm(px, pj) + get_comm(pj, px);
 
-    auto forwards_latency_i = latency_map.at({sx, si});
-    auto backwards_latency_i = latency_map.at({si, sx});
-    auto total_latency_i = forwards_latency_i + backwards_latency_i;
+    auto total_latency_i = latency_map.at({sx, si}) + latency_map.at({si, sx});
+    auto total_latency_j = latency_map.at({sx, sj}) + latency_map.at({sj, sx});
 
-    auto forwards_latency_j = latency_map.at({sx, sj});
-    auto backwards_latency_j = latency_map.at({sj, sx});
-    auto total_latency_j = forwards_latency_j + backwards_latency_j;
-
-    if (si != sx) {
-      cost_difference += (total_comm_j - total_comm_i) * total_latency_i;
-    }
-    if (sj != sx) {
-      cost_difference += (total_comm_i - total_comm_j) * total_latency_j;
-    }
-    return original_cost + cost_difference;
+    cost_difference += (total_comm_j - total_comm_i) * total_latency_i;
+    cost_difference += (total_comm_i - total_comm_j) * total_latency_j;
   }
 
   return original_cost + cost_difference;
 }
 
-std::vector<int>
-compute_rank_map(int size, const LatencyMapType &latency_map,
-                 RankCommMapType &rank_comm) { // TODO: const ref for rank_comm
+std::vector<int> compute_rank_map(int size, const LatencyMapType &latency_map,
+                                  const RankCommMapType &rank_comm) {
   std::vector<int> mapping(size);
   std::iota(mapping.begin(), mapping.end(), 0);
 
@@ -146,9 +145,9 @@ compute_rank_map(int size, const LatencyMapType &latency_map,
   return mapping;
 }
 
-std::vector<int>
-compute_rank_map_tree(int size, const LatencyMapType &latency_map,
-                      RankCommMapType &rank_comm) { // TODO: rank_comm const ref
+std::vector<int> compute_rank_map_tree(int size,
+                                       const LatencyMapType &latency_map,
+                                       const RankCommMapType &rank_comm) {
   std::vector<int> mapping(size);
   std::iota(mapping.begin(), mapping.end(), 0);
 
