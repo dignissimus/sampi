@@ -352,88 +352,161 @@ template <typename Derived> struct RankParticipant {
   int get_new_rank_fortran();
 };
 
-// todo: do I even need/want crtp
-struct Pt2PtRankParticipant : RankParticipant<Pt2PtRankParticipant> {
-  /// requires PMPI_init called
-  int get_new_rank_c() {
+struct PingPongCostModel {
+  static LatencyMapType compute_latency() {
+    LatencyMapType local_latency_map(0, PairHash{});
     int world_rank, world_size;
     PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    global_rank = world_rank;
-    latency_map = compute_latency_map();
 
-    auto rank_comm =
-        read_communication_profile(config.profile_filepath, world_size);
-    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
-    int new_rank = rank_map[world_rank];
-    return new_rank;
-  }
+    std::vector<char> message(config.ping_pong_msg_size, 'a');
 
-  int get_new_rank_fortran() {
-    // todo: check errors
-    int world_rank, world_size, ierr;
-    MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
-    pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
-    pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+    for (int i = 0; i < world_size; ++i) {
+      for (int j = i + 1; j < world_size; ++j) {
+        double latency = 0.0;
+        PMPI_Barrier(MPI_COMM_WORLD);
 
-    global_rank = world_rank;
-    latency_map = compute_latency_map();
+        if (world_rank == i || world_rank == j) {
+          int other = (world_rank == i) ? j : i;
+          auto start = std::chrono::high_resolution_clock::now();
 
-    auto rank_comm =
-        read_communication_profile(config.profile_filepath, world_size);
-    rank_map = compute_rank_map(world_size, latency_map, rank_comm);
-    int new_rank = rank_map[world_rank];
-    return new_rank;
+          for (int k = 0; k < config.ping_pong_count; ++k) {
+            if (world_rank < other) {
+              PMPI_Send(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                        other, config.ping_pong_tag, MPI_COMM_WORLD);
+              PMPI_Recv(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                        other, config.ping_pong_tag, MPI_COMM_WORLD,
+                        MPI_STATUS_IGNORE);
+            } else {
+              PMPI_Recv(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                        other, config.ping_pong_tag, MPI_COMM_WORLD,
+                        MPI_STATUS_IGNORE);
+              PMPI_Send(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                        other, config.ping_pong_tag, MPI_COMM_WORLD);
+            }
+          }
+          auto end = std::chrono::high_resolution_clock::now();
+          latency = std::chrono::duration<double>(end - start).count() /
+                    (2.0 * config.ping_pong_count);
+        }
+
+        PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
+        local_latency_map[{i, j}] = latency;
+        local_latency_map[{j, i}] = latency;
+      }
+    }
+    return local_latency_map;
   }
 };
 
-// todo: same crtp concern as above
-// todo: probably want to refactor, the two strategies only differ in how they
-// calculate the cost matrix So might want to use composition one component gets
-// the cost matrix one component computes the rank placement
-struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
-  /// requires PMPI_init called
-  int get_new_rank_c() {
+struct TreeCostModel {
+  static LatencyMapType compute_latency() {
+    LatencyMapType local_latency_map(0, PairHash{});
     int world_rank, world_size;
     PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    global_rank = world_rank;
-    latency_map = compute_latency_map_tree();
 
-    auto rank_comm =
-        read_communication_profile(config.profile_filepath, world_size);
-    rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
-    int new_rank = rank_map[world_rank];
-    return new_rank;
-  }
+    MPI_Comm node_comm;
+    PMPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, world_rank,
+                         MPI_INFO_NULL, &node_comm);
 
-  int get_new_rank_fortran() {
-    // todo: check errors
-    int world_rank, world_size, ierr;
-    MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
-    pmpi_comm_rank_(&f_comm_world, &world_rank, &ierr);
-    pmpi_comm_size_(&f_comm_world, &world_size, &ierr);
+    int node_comm_size;
+    PMPI_Comm_size(node_comm, &node_comm_size);
+    std::vector<int> node_ranks(node_comm_size);
+    PMPI_Allgather(&world_rank, 1, MPI_INT, node_ranks.data(), 1, MPI_INT,
+                   node_comm);
 
-    global_rank = world_rank;
-    latency_map = compute_latency_map_tree();
+    int socket_id = get_socket_id();
+    MPI_Comm socket_comm;
+    PMPI_Comm_split(node_comm, socket_id, 0, &socket_comm);
 
-    auto rank_comm =
-        read_communication_profile(config.profile_filepath, world_size);
-    rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
-    int new_rank = rank_map[world_rank];
-    return new_rank;
+    int socket_comm_size;
+    PMPI_Comm_size(socket_comm, &socket_comm_size);
+    std::vector<int> socket_ranks(socket_comm_size);
+    PMPI_Allgather(&world_rank, 1, MPI_INT, socket_ranks.data(), 1, MPI_INT,
+                   socket_comm);
+
+    for (int i = 0; i < world_size; ++i) {
+      local_latency_map[{i, world_rank}] = config.latency_arbitrary;
+      local_latency_map[{world_rank, i}] = config.latency_arbitrary;
+    }
+    for (int rank : node_ranks) {
+      local_latency_map[{rank, world_rank}] = config.latency_same_node;
+      local_latency_map[{world_rank, rank}] = config.latency_same_node;
+    }
+    for (int rank : socket_ranks) {
+      local_latency_map[{rank, world_rank}] = config.latency_same_socket;
+      local_latency_map[{world_rank, rank}] = config.latency_same_socket;
+    }
+    local_latency_map[{world_rank, world_rank}] = config.latency_same_core;
+
+    for (int i = 0; i < world_size; ++i) {
+      for (int j = i; j < world_size; ++j) {
+        double latency = (world_rank == i) ? local_latency_map[{i, j}] : 0.0;
+        PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
+        local_latency_map[{i, j}] = latency;
+        local_latency_map[{j, i}] = latency;
+      }
+    }
+    return local_latency_map;
   }
 };
 
-static auto rank_participant = TreeMapRankParticipant{};
+template <typename CostModel> struct TwoOptOptimiser {
+  static std::vector<int> optimise(int world_size,
+                                   const RankCommMapType &rank_comm,
+                                   LatencyMapType &out_latency_map) {
 
+    out_latency_map = CostModel::compute_latency();
+
+    std::vector<int> mapping(world_size);
+    std::iota(mapping.begin(), mapping.end(), 0);
+
+    double best_cost =
+        compute_cost(mapping, out_latency_map, rank_comm, world_size);
+    bool improved = true;
+
+    while (improved) {
+      improved = false;
+      for (int i = 0; i < world_size; ++i) {
+        for (int j = i + 1; j < world_size; ++j) {
+          double new_cost = update_cost(mapping, out_latency_map, rank_comm,
+                                        world_size, i, j, best_cost);
+
+          if (new_cost < best_cost) {
+            best_cost = new_cost;
+            std::swap(mapping[i], mapping[j]);
+            improved = true;
+          }
+        }
+      }
+    }
+    return mapping;
+  }
+};
+
+static void optimise_placements(int world_rank, int world_size) {
+  global_rank = world_rank;
+  auto rank_comm =
+      read_communication_profile(config.profile_filepath, world_size);
+  rank_map = TwoOptOptimiser<TreeCostModel>::optimise(world_size, rank_comm,
+                                                      latency_map);
+}
+
+// TODO: Read error value
 int MPI_Init(int *argc, char ***argv) {
-  std::cout << "[ALARM] MPI_Init called" << std::endl;
   int return_value = PMPI_Init(argc, argv);
-  // todo: check return value
-  int new_rank = rank_participant.get_new_rank_c();
+  if (return_value != MPI_SUCCESS)
+    return return_value;
+
+  int world_rank, world_size;
+  PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+  optimise_placements(world_rank, world_size);
+
+  int new_rank = rank_map[world_rank];
   int err = PMPI_Comm_split(MPI_COMM_WORLD, 0, new_rank, &reorder_comm_world);
-  // todo: check err value
   return return_value;
 }
 
@@ -605,20 +678,55 @@ void mpi_init_(int *ierror) {
   if (*ierror != MPI_SUCCESS)
     return;
 
-  int new_rank = rank_participant.get_new_rank_fortran();
+  int world_rank, world_size;
+  MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+
+  pmpi_comm_rank_(&f_comm_world, &world_rank, ierror);
+  if (*ierror != MPI_SUCCESS)
+    return;
+
+  pmpi_comm_size_(&f_comm_world, &world_size, ierror);
+  if (*ierror != MPI_SUCCESS)
+    return;
+
+  optimise_placements(world_rank, world_size);
+
+  int new_rank = rank_map[world_rank];
   MPI_Fint f_new_comm;
   int colour = 0;
-  int ierr;
-  MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
-  pmpi_comm_split_(&f_comm_world, &colour, &new_rank, &f_new_comm, &ierr);
-  // todo: check error value
-  reorder_comm_world = MPI_Comm_f2c(f_new_comm);
+
+  pmpi_comm_split_(&f_comm_world, &colour, &new_rank, &f_new_comm, ierror);
+  if (*ierror == MPI_SUCCESS) {
+    reorder_comm_world = MPI_Comm_f2c(f_new_comm);
+  }
 }
 
-// todo: need to reorder in init thread
 void mpi_init_thread_(int *required, int *provided, int *ierror) {
-  std::cout << "[ALARM] MPI_Init_thread called" << std::endl;
   pmpi_init_thread_(required, provided, ierror);
+  if (*ierror != MPI_SUCCESS)
+    return;
+
+  int world_rank, world_size;
+  MPI_Fint f_comm_world = MPI_Comm_c2f(MPI_COMM_WORLD);
+
+  pmpi_comm_rank_(&f_comm_world, &world_rank, ierror);
+  if (*ierror != MPI_SUCCESS)
+    return;
+
+  pmpi_comm_size_(&f_comm_world, &world_size, ierror);
+  if (*ierror != MPI_SUCCESS)
+    return;
+
+  optimise_placements(world_rank, world_size);
+
+  int new_rank = rank_map[world_rank];
+  MPI_Fint f_new_comm;
+  int colour = 0;
+
+  pmpi_comm_split_(&f_comm_world, &colour, &new_rank, &f_new_comm, ierror);
+  if (*ierror == MPI_SUCCESS) {
+    reorder_comm_world = MPI_Comm_f2c(f_new_comm);
+  }
 }
 
 void mpi_finalize_(int *ierror) {
