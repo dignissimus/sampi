@@ -7,6 +7,7 @@
 #include <mpi.h>
 #include <numeric>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -262,16 +263,22 @@ LatencyMapType compute_latency_map() {
 // todo: replace with hwloc
 int get_socket_id() {
   int cpu_id = sched_getcpu();
-  char path[256];
-  snprintf(path, sizeof(path),
-           "/sys/devices/system/cpu/cpu%d/topology/physical_package_id",
-           cpu_id);
-  FILE *file = fopen(path, "r");
-  if (!file)
-    throw "couldn't find socket id";
+  std::string path = "/sys/devices/system/cpu/cpu" + std::to_string(cpu_id) +
+                     "/topology/physical_package_id";
+
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    throw std::runtime_error(
+        "[SAMPI] ERROR: Could not open socket topology file for CPU " +
+        std::to_string(cpu_id));
+  }
+
   int socket_id;
-  fscanf(file, "%d", &socket_id);
-  fclose(file);
+  if (!(file >> socket_id)) {
+    throw std::runtime_error("[SAMPI] ERROR: Could not parse socket ID from " +
+                             path);
+  }
+
   return socket_id;
 }
 
