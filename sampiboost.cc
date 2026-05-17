@@ -11,6 +11,22 @@
 #include <utility>
 #include <vector>
 
+struct ReorderConfig {
+  std::string profile_filepath = "sampi_communication_profile.txt";
+
+  // For the point-to-point cost model
+  int ping_pong_count = 50;
+  int ping_pong_tag = 999;
+  int ping_pong_msg_size = 8;
+
+  double latency_arbitrary = 4.0;
+  double latency_same_node = 2.0;
+  double latency_same_socket = 1.0;
+  double latency_same_core = 0.0;
+};
+
+static ReorderConfig config;
+
 static MPI_Comm reorder_comm_world = MPI_COMM_NULL;
 static std::vector<int> rank_map;
 struct PairHash {
@@ -204,43 +220,38 @@ LatencyMapType compute_latency_map() {
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   PMPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-  const int PING_PONGS = 50;
-  const int TAG = 999;
-  const int MSG_SIZE = 8;
-  std::vector<char> message(MSG_SIZE, 'a');
+  std::vector<char> message(config.ping_pong_msg_size, 'a');
 
   for (int i = 0; i < world_size; ++i) {
     for (int j = i + 1; j < world_size; ++j) {
-
       double latency = 0.0;
-
       PMPI_Barrier(MPI_COMM_WORLD);
+
       if (world_rank == i || world_rank == j) {
         int other = (world_rank == i) ? j : i;
-
         auto start = std::chrono::high_resolution_clock::now();
 
-        for (int k = 0; k < PING_PONGS; ++k) {
+        for (int k = 0; k < config.ping_pong_count; ++k) {
           if (world_rank < other) {
-            PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, other, TAG,
-                      MPI_COMM_WORLD);
-            PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, other, TAG,
-                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            PMPI_Send(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                      other, config.ping_pong_tag, MPI_COMM_WORLD);
+            PMPI_Recv(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                      other, config.ping_pong_tag, MPI_COMM_WORLD,
+                      MPI_STATUS_IGNORE);
           } else {
-            PMPI_Recv(message.data(), MSG_SIZE, MPI_CHAR, other, TAG,
-                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            PMPI_Send(message.data(), MSG_SIZE, MPI_CHAR, other, TAG,
-                      MPI_COMM_WORLD);
+            PMPI_Recv(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                      other, config.ping_pong_tag, MPI_COMM_WORLD,
+                      MPI_STATUS_IGNORE);
+            PMPI_Send(message.data(), config.ping_pong_msg_size, MPI_CHAR,
+                      other, config.ping_pong_tag, MPI_COMM_WORLD);
           }
         }
-
         auto end = std::chrono::high_resolution_clock::now();
         latency = std::chrono::duration<double>(end - start).count() /
-                  (2.0 * PING_PONGS);
+                  (2.0 * config.ping_pong_count);
       }
 
       PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
-
       latency_map[{i, j}] = latency;
       latency_map[{j, i}] = latency;
     }
@@ -292,24 +303,24 @@ LatencyMapType compute_latency_map_tree() {
 
   // Arbitrary rank
   for (int i = 0; i < world_size; ++i) {
-    latency_map[{i, world_rank}] = 4;
-    latency_map[{world_rank, i}] = 4;
+    latency_map[{i, world_rank}] = config.latency_arbitrary;
+    latency_map[{world_rank, i}] = config.latency_arbitrary;
   }
 
   // Same node
   for (int rank : node_ranks) {
-    latency_map[{rank, world_rank}] = 2;
-    latency_map[{world_rank, rank}] = 2;
+    latency_map[{rank, world_rank}] = config.latency_same_node;
+    latency_map[{world_rank, rank}] = config.latency_same_node;
   }
 
   // Same socket
   for (int rank : socket_ranks) {
-    latency_map[{rank, world_rank}] = 1;
-    latency_map[{world_rank, rank}] = 1;
+    latency_map[{rank, world_rank}] = config.latency_same_socket;
+    latency_map[{world_rank, rank}] = config.latency_same_socket;
   }
 
   // Same core
-  latency_map[{world_rank, world_rank}] = 0;
+  latency_map[{world_rank, world_rank}] = config.latency_same_core;
 
   // todo: does it really make sense to 1) store the latency map explicitly
   // 2) make every rank aware of the latency map
@@ -345,8 +356,8 @@ struct Pt2PtRankParticipant : RankParticipant<Pt2PtRankParticipant> {
     global_rank = world_rank;
     latency_map = compute_latency_map();
 
-    auto rank_comm = read_communication_profile(
-        "sampi_communication_profile.txt", world_size);
+    auto rank_comm =
+        read_communication_profile(config.profile_filepath, world_size);
     rank_map = compute_rank_map(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
@@ -362,8 +373,8 @@ struct Pt2PtRankParticipant : RankParticipant<Pt2PtRankParticipant> {
     global_rank = world_rank;
     latency_map = compute_latency_map();
 
-    auto rank_comm = read_communication_profile(
-        "sampi_communication_profile.txt", world_size);
+    auto rank_comm =
+        read_communication_profile(config.profile_filepath, world_size);
     rank_map = compute_rank_map(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
@@ -383,8 +394,8 @@ struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
     global_rank = world_rank;
     latency_map = compute_latency_map_tree();
 
-    auto rank_comm = read_communication_profile(
-        "sampi_communication_profile.txt", world_size);
+    auto rank_comm =
+        read_communication_profile(config.profile_filepath, world_size);
     rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
@@ -400,8 +411,8 @@ struct TreeMapRankParticipant : RankParticipant<Pt2PtRankParticipant> {
     global_rank = world_rank;
     latency_map = compute_latency_map_tree();
 
-    auto rank_comm = read_communication_profile(
-        "sampi_communication_profile.txt", world_size);
+    auto rank_comm =
+        read_communication_profile(config.profile_filepath, world_size);
     rank_map = compute_rank_map_tree(world_size, latency_map, rank_comm);
     int new_rank = rank_map[world_rank];
     return new_rank;
