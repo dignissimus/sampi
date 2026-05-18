@@ -2,7 +2,7 @@
 
 source "$CONFIG_FILE"
 
-module purge
+module restore
 module load $FOAM_MODULE
 eval "$FOAM_SOURCE_CMD"
 

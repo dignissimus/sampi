@@ -13,7 +13,7 @@ BASE_DIR="$SCRIPT_DIR/motorbike_base"
 source "$CONFIG_FILE"
 
 echo "=== Loading OpenFOAM environment ==="
-module purge
+module restore
 module load $FOAM_MODULE
 eval "$FOAM_SOURCE_CMD"
 
