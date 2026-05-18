@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+// TODO: Probably don't want most of these to be static
 struct PingPongCostModel {
   static LatencyMapType compute_latency() {
     LatencyMapType local_latency_map(0, PairHash{});
