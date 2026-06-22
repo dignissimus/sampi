@@ -50,11 +50,12 @@ std::string Profiler::generate_and_track_communicator(
 
 void Profiler::record_p2p_send(int dest_communicator_rank,
                                const std::string &comm_name) {
-  if (!config_)
+  if (!config_ || dest_communicator_rank == MPI_PROC_NULL)
     return;
 
   auto it = communicator_participants_.find(comm_name);
   if (it != communicator_participants_.end() &&
+      dest_communicator_rank >= 0 &&
       dest_communicator_rank < static_cast<int>(it->second.size())) {
     int global_dest = it->second[dest_communicator_rank];
     ++partial_rank_communication_[{config_->global_rank, global_dest}];
@@ -75,8 +76,12 @@ void Profiler::record_collective_broadcast(const std::string &comm_name) {
 
 int Profiler::translate_to_global_rank(const std::string &comm_name,
                                        int communicator_rank) {
+  if (communicator_rank == MPI_PROC_NULL)
+    return MPI_PROC_NULL;
+
   auto it = communicator_participants_.find(comm_name);
   if (it != communicator_participants_.end() &&
+      communicator_rank >= 0 &&
       communicator_rank < static_cast<int>(it->second.size())) {
     return it->second[communicator_rank];
   }

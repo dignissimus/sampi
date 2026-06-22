@@ -309,7 +309,7 @@ void mpi_comm_split_(MPI_Fint *comm, int *color, int *key, MPI_Fint *newcomm,
                      int *ierror) {
   pmpi_comm_split_(comm, color, key, newcomm, ierror);
 
-  if (*ierror == MPI_SUCCESS) {
+  if (*ierror == MPI_SUCCESS && *newcomm != MPI_Comm_c2f(MPI_COMM_NULL)) {
     std::string old_name = get_fortran_communicator_name(*comm);
 
     int new_size = 0;
@@ -340,7 +340,7 @@ void mpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods,
                       int *reorder, MPI_Fint *comm_cart_f, int *ierror) {
   pmpi_cart_create_(comm_old, ndims, dims, periods, reorder, comm_cart_f,
                     ierror);
-  if (*ierror != MPI_SUCCESS)
+  if (*ierror != MPI_SUCCESS || *comm_cart_f == MPI_Comm_c2f(MPI_COMM_NULL))
     return;
 
   std::string old_name = get_fortran_communicator_name(*comm_old);
@@ -377,7 +377,7 @@ void mpi_cart_create_(MPI_Fint *comm_old, int *ndims, int *dims, int *periods,
 
 void mpi_comm_dup_(MPI_Fint *comm, MPI_Fint *newcomm_f, int *ierror) {
   pmpi_comm_dup_(comm, newcomm_f, ierror);
-  if (*ierror != MPI_SUCCESS)
+  if (*ierror != MPI_SUCCESS || *newcomm_f == MPI_Comm_c2f(MPI_COMM_NULL))
     return;
 
   std::string old_name = get_fortran_communicator_name(*comm);
