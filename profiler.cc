@@ -109,7 +109,9 @@ void Profiler::dump_profile() {
                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       for (int j = 0; j < world_size; ++j) {
         all_rank_communication[i][j] += rank_data[j];
-        all_rank_communication[j][i] += rank_data[j];
+        if (i != j) {
+          all_rank_communication[j][i] += rank_data[j];
+        }
       }
     }
     write_rank_communication_to_file(all_rank_communication);
@@ -152,7 +154,9 @@ void Profiler::dump_profile_fortran() {
 
       for (int j = 0; j < world_size; ++j) {
         all_rank_communication[i][j] += rank_data[j];
-        all_rank_communication[j][i] += rank_data[j];
+        if (i != j) {
+          all_rank_communication[j][i] += rank_data[j];
+        }
       }
     }
     write_rank_communication_to_file(all_rank_communication);
