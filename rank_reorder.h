@@ -32,7 +32,7 @@ struct PairHash {
 
 using LatencyMapType =
     std::unordered_map<std::pair<int, int>, double, PairHash>;
-using RankCommMapType = std::unordered_map<std::pair<int, int>, int, PairHash>;
+using RankCommMapType = std::unordered_map<std::pair<int, int>, long long int, PairHash>;
 
 class RankReorder {
 public:

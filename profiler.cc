@@ -90,8 +90,8 @@ void Profiler::dump_profile() {
   int world_size = config_->global_world_size;
 
   if (rank == 0) {
-    std::vector<std::vector<unsigned long long int>> all_rank_communication(
-        world_size, std::vector<unsigned long long int>(world_size, 0));
+    std::vector<std::vector<long long int>> all_rank_communication(
+        world_size, std::vector<long long int>(world_size, 0));
 
     for (int i = 0; i < world_size; ++i) {
       all_rank_communication[0][i] = partial_rank_communication_[{0, i}];
@@ -99,7 +99,7 @@ void Profiler::dump_profile() {
     }
 
     for (int i = 1; i < world_size; ++i) {
-      std::vector<unsigned long long int> rank_data(world_size, 0);
+      std::vector<long long int> rank_data(world_size, 0);
       PMPI_Recv(rank_data.data(), world_size, MPI_LONG_LONG, i, 0,
                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       for (int j = 0; j < world_size; ++j) {
@@ -109,7 +109,7 @@ void Profiler::dump_profile() {
     }
     write_rank_communication_to_file(all_rank_communication);
   } else {
-    std::vector<unsigned long long int> send_to_vector(world_size, 0);
+    std::vector<long long int> send_to_vector(world_size, 0);
     for (int i = 0; i < world_size; ++i) {
       send_to_vector[i] = partial_rank_communication_[{rank, i}];
     }
@@ -129,8 +129,8 @@ void Profiler::dump_profile_fortran() {
   int f_ierr;
 
   if (rank == 0) {
-    std::vector<std::vector<unsigned long long int>> all_rank_communication(
-        world_size, std::vector<unsigned long long int>(world_size, 0));
+    std::vector<std::vector<long long int>> all_rank_communication(
+        world_size, std::vector<long long int>(world_size, 0));
 
     for (int i = 0; i < world_size; ++i) {
       all_rank_communication[0][i] = partial_rank_communication_[{0, i}];
@@ -138,7 +138,7 @@ void Profiler::dump_profile_fortran() {
     }
 
     for (int i = 1; i < world_size; ++i) {
-      std::vector<unsigned long long int> rank_data(world_size, 0);
+      std::vector<long long int> rank_data(world_size, 0);
       int count = world_size;
       int source = i;
       int tag = 0;
@@ -152,7 +152,7 @@ void Profiler::dump_profile_fortran() {
     }
     write_rank_communication_to_file(all_rank_communication);
   } else {
-    std::vector<unsigned long long int> send_to_vector(world_size, 0);
+    std::vector<long long int> send_to_vector(world_size, 0);
     for (int i = 0; i < world_size; ++i) {
       send_to_vector[i] = partial_rank_communication_[{rank, i}];
     }
@@ -165,7 +165,7 @@ void Profiler::dump_profile_fortran() {
 }
 
 void Profiler::write_rank_communication_to_file(
-    const std::vector<std::vector<unsigned long long int>>
+    const std::vector<std::vector<long long int>>
         &all_rank_communication) {
   std::ofstream outfile("sampi_communication_profile.txt");
   if (!outfile.is_open()) {

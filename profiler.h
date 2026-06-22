@@ -54,13 +54,13 @@ private:
 
   // TODO: Can replace with just a vector since I only record sends from this
   // process
-  std::map<std::pair<int, int>, unsigned long long int>
+  std::map<std::pair<int, int>, long long int>
       partial_rank_communication_;
   std::map<std::string, std::vector<int>> communicator_participants_;
   std::map<std::string, int> split_count_;
 
   void write_rank_communication_to_file(
-      const std::vector<std::vector<unsigned long long int>>
+      const std::vector<std::vector<long long int>>
           &all_rank_communication);
 };
 

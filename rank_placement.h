@@ -158,10 +158,10 @@ struct TreeCostModel {
 
 template <typename CostModel> class TwoOptOptimiser {
 private:
-  static int get_comm_volume(const RankCommMapType &rank_comm, int src,
+  static long long int get_comm_volume(const RankCommMapType &rank_comm, int src,
                              int dst) {
     auto it = rank_comm.find({src, dst});
-    return it != rank_comm.end() ? it->second : 0;
+    return it != rank_comm.end() ? it->second : 0LL;
   }
 
   static double compute_cost(const std::vector<int> &mapping,
@@ -173,7 +173,7 @@ private:
         int pi = mapping[i];
         int pj = mapping[j];
 
-        int forwards_comm = 0, backwards_comm = 0;
+        long long int forwards_comm = 0, backwards_comm = 0;
         auto it_fwd = rank_comm.find({pi, pj});
         if (it_fwd != rank_comm.end())
           forwards_comm = it_fwd->second;
@@ -269,7 +269,7 @@ inline RankCommMapType read_communication_profile(const std::string &filename,
   int i = 0;
   while (std::getline(file, line) && i < world_size) {
     std::istringstream iss(line);
-    int value;
+    long long int value;
     int j = 0;
     while (iss >> value && j < world_size) {
       rank_comm[{i, j}] = value;
