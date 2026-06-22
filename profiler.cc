@@ -94,34 +94,33 @@ void Profiler::dump_profile() {
   int rank = config_->global_rank;
   int world_size = config_->global_world_size;
 
+  std::vector<long long int> local_communication_counts(world_size, 0);
+  for (int i = 0; i < world_size; ++i) {
+    local_communication_counts[i] = partial_rank_communication_[{rank, i}];
+  }
+
+  std::vector<long long int> gathered_communication_counts;
+  if (rank == 0) {
+    gathered_communication_counts.resize(world_size * world_size, 0);
+  }
+
+  PMPI_Gather(local_communication_counts.data(), world_size, MPI_LONG_LONG,
+              gathered_communication_counts.data(), world_size, MPI_LONG_LONG, 0, MPI_COMM_WORLD);
+
   if (rank == 0) {
     std::vector<std::vector<long long int>> all_rank_communication(
         world_size, std::vector<long long int>(world_size, 0));
 
     for (int i = 0; i < world_size; ++i) {
-      all_rank_communication[0][i] = partial_rank_communication_[{0, i}];
-      all_rank_communication[i][0] = partial_rank_communication_[{0, i}];
-    }
-
-    for (int i = 1; i < world_size; ++i) {
-      std::vector<long long int> rank_data(world_size, 0);
-      PMPI_Recv(rank_data.data(), world_size, MPI_LONG_LONG, i, 0,
-                MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       for (int j = 0; j < world_size; ++j) {
-        all_rank_communication[i][j] += rank_data[j];
+        long long int messages_sent = gathered_communication_counts[i * world_size + j];
+        all_rank_communication[i][j] += messages_sent;
         if (i != j) {
-          all_rank_communication[j][i] += rank_data[j];
+          all_rank_communication[j][i] += messages_sent;
         }
       }
     }
     write_rank_communication_to_file(all_rank_communication);
-  } else {
-    std::vector<long long int> send_to_vector(world_size, 0);
-    for (int i = 0; i < world_size; ++i) {
-      send_to_vector[i] = partial_rank_communication_[{rank, i}];
-    }
-    PMPI_Send(send_to_vector.data(), world_size, MPI_LONG_LONG, 0, 0,
-              MPI_COMM_WORLD);
   }
 }
 
@@ -135,41 +134,36 @@ void Profiler::dump_profile_fortran() {
   MPI_Fint f_long_long = MPI_Type_c2f(MPI_LONG_LONG);
   int f_ierr;
 
+  std::vector<long long int> local_communication_counts(world_size, 0);
+  for (int i = 0; i < world_size; ++i) {
+    local_communication_counts[i] = partial_rank_communication_[{rank, i}];
+  }
+
+  std::vector<long long int> gathered_communication_counts;
+  if (rank == 0) {
+    gathered_communication_counts.resize(world_size * world_size, 0);
+  }
+
+  int count = world_size;
+  int root = 0;
+  pmpi_gather_(local_communication_counts.data(), &count, &f_long_long,
+               gathered_communication_counts.data(), &count, &f_long_long, &root,
+               &f_comm_world, &f_ierr);
+
   if (rank == 0) {
     std::vector<std::vector<long long int>> all_rank_communication(
         world_size, std::vector<long long int>(world_size, 0));
 
     for (int i = 0; i < world_size; ++i) {
-      all_rank_communication[0][i] = partial_rank_communication_[{0, i}];
-      all_rank_communication[i][0] = partial_rank_communication_[{0, i}];
-    }
-
-    for (int i = 1; i < world_size; ++i) {
-      std::vector<long long int> rank_data(world_size, 0);
-      int count = world_size;
-      int source = i;
-      int tag = 0;
-      pmpi_recv_(rank_data.data(), &count, &f_long_long, &source, &tag,
-                 &f_comm_world, (MPI_Fint *)MPI_F_STATUS_IGNORE, &f_ierr);
-
       for (int j = 0; j < world_size; ++j) {
-        all_rank_communication[i][j] += rank_data[j];
+        long long int messages_sent = gathered_communication_counts[i * world_size + j];
+        all_rank_communication[i][j] += messages_sent;
         if (i != j) {
-          all_rank_communication[j][i] += rank_data[j];
+          all_rank_communication[j][i] += messages_sent;
         }
       }
     }
     write_rank_communication_to_file(all_rank_communication);
-  } else {
-    std::vector<long long int> send_to_vector(world_size, 0);
-    for (int i = 0; i < world_size; ++i) {
-      send_to_vector[i] = partial_rank_communication_[{rank, i}];
-    }
-    int count = world_size;
-    int dest = 0;
-    int tag = 0;
-    pmpi_send_(send_to_vector.data(), &count, &f_long_long, &dest, &tag,
-               &f_comm_world, &f_ierr);
   }
 }
 
