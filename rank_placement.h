@@ -8,6 +8,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <numeric>
+#include <sched.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
