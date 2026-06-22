@@ -118,10 +118,54 @@ int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
                        recvcount, recvtype, source, recvtag, comm, status);
 }
 
+int MPI_Sendrecv_replace(void *buf, int count, MPI_Datatype datatype, int dest,
+                         int sendtag, int source, int recvtag, MPI_Comm comm,
+                         MPI_Status *status) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Sendrecv_replace(buf, count, datatype, dest, sendtag, source,
+                               recvtag, comm, status);
+}
+
+int MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
+              int tag, MPI_Comm comm) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Ssend(buf, count, datatype, dest, tag, comm);
+}
+
+int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+              int tag, MPI_Comm comm) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Bsend(buf, count, datatype, dest, tag, comm);
+}
+
+int MPI_Rsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+              int tag, MPI_Comm comm) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Rsend(buf, count, datatype, dest, tag, comm);
+}
+
 int MPI_Isend(const void *buf, int count, MPI_Datatype datatype, int dest,
               int tag, MPI_Comm comm, MPI_Request *request) {
   Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
   return PMPI_Isend(buf, count, datatype, dest, tag, comm, request);
+}
+
+int MPI_Issend(const void *buf, int count, MPI_Datatype datatype, int dest,
+               int tag, MPI_Comm comm, MPI_Request *request) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Issend(buf, count, datatype, dest, tag, comm, request);
+}
+
+int MPI_Ibsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+               int tag, MPI_Comm comm, MPI_Request *request) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Ibsend(buf, count, datatype, dest, tag, comm, request);
+}
+
+int MPI_Irsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+               int tag, MPI_Comm comm, MPI_Request *request) {
+  Profiler::instance().record_p2p_send(dest, get_communicator_name(comm));
+  return PMPI_Irsend(buf, count, datatype, dest, tag, comm, request);
 }
 
 int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
@@ -439,12 +483,56 @@ void mpi_sendrecv_(void *sendbuf, int *sendcount, MPI_Fint *sendtype, int *dest,
                  recvcount, recvtype, source, recvtag, comm, status_f, ierror);
 }
 
+void mpi_sendrecv_replace_(void *buf, int *count, MPI_Fint *datatype, int *dest,
+                           int *sendtag, int *source, int *recvtag,
+                           MPI_Fint *comm, MPI_Fint *status_f, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_sendrecv_replace_(buf, count, datatype, dest, sendtag, source, recvtag, comm, status_f, ierror);
+}
+
+void mpi_ssend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_ssend_(buf, count, datatype, dest, tag, comm, ierror);
+}
+
+void mpi_bsend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_bsend_(buf, count, datatype, dest, tag, comm, ierror);
+}
+
+void mpi_rsend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_rsend_(buf, count, datatype, dest, tag, comm, ierror);
+}
+
 void mpi_isend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag,
                 MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
   MPI_Comm c_comm = MPI_Comm_f2c(*comm);
   Profiler::instance().record_p2p_send(*dest,
                                             get_communicator_name(c_comm));
   pmpi_isend_(buf, count, datatype, dest, tag, comm, request_f, ierror);
+}
+
+void mpi_issend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_issend_(buf, count, datatype, dest, tag, comm, request_f, ierror);
+}
+
+void mpi_ibsend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_ibsend_(buf, count, datatype, dest, tag, comm, request_f, ierror);
+}
+
+void mpi_irsend_(void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror) {
+  MPI_Comm c_comm = MPI_Comm_f2c(*comm);
+  Profiler::instance().record_p2p_send(*dest, get_communicator_name(c_comm));
+  pmpi_irsend_(buf, count, datatype, dest, tag, comm, request_f, ierror);
 }
 
 void mpi_irecv_(void *buf, int *count, MPI_Fint *datatype, int *source,

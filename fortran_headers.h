@@ -31,9 +31,16 @@ extern "C" {
 
     // Point to point
     DECLARE_PMPI_VARIANTS(send, SEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror))
+    DECLARE_PMPI_VARIANTS(ssend, SSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror))
+    DECLARE_PMPI_VARIANTS(bsend, BSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror))
+    DECLARE_PMPI_VARIANTS(rsend, RSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, int *ierror))
     DECLARE_PMPI_VARIANTS(recv, RECV, (void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror))
     DECLARE_PMPI_VARIANTS(sendrecv, SENDRECV, (const void *sendbuf, int *sendcount, MPI_Fint *sendtype, int *dest, int *sendtag, void *recvbuf, int *recvcount, MPI_Fint *recvtype, int *source, int *recvtag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror))
+    DECLARE_PMPI_VARIANTS(sendrecv_replace, SENDRECV_REPLACE, (void *buf, int *count, MPI_Fint *datatype, int *dest, int *sendtag, int *source, int *recvtag, MPI_Fint *comm, MPI_Fint *status_f, int *ierror))
     DECLARE_PMPI_VARIANTS(isend, ISEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror))
+    DECLARE_PMPI_VARIANTS(issend, ISSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror))
+    DECLARE_PMPI_VARIANTS(ibsend, IBSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror))
+    DECLARE_PMPI_VARIANTS(irsend, IRSEND, (const void *buf, int *count, MPI_Fint *datatype, int *dest, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror))
     DECLARE_PMPI_VARIANTS(irecv, IRECV, (void *buf, int *count, MPI_Fint *datatype, int *source, int *tag, MPI_Fint *comm, MPI_Fint *request_f, int *ierror))
     DECLARE_PMPI_VARIANTS(wait, WAIT, (MPI_Fint *request_f, MPI_Fint *status_f, int *ierror))
     DECLARE_PMPI_VARIANTS(waitall, WAITALL, (int *count, MPI_Fint *requests_f, MPI_Fint *statuses_f, int *ierror))
