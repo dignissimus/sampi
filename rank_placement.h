@@ -236,15 +236,28 @@ public:
     double best_cost =
         compute_cost(mapping, out_latency_map, rank_comm, world_size);
     bool improved = true;
+    int iteration_count = 0;
+    int world_rank;
+    PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
     while (improved) {
       improved = false;
+      iteration_count++;
+
+      if (world_rank == 0) {
+        auto now = std::chrono::system_clock::now();
+        auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now).time_since_epoch().count();
+        std::cout << "[TwoOpt] Iteration: " << iteration_count 
+                  << ", Timestamp: " << now_ms << " ms"
+                  << ", Current Cost: " << best_cost << std::endl;
+      }
+
       for (int i = 0; i < world_size; ++i) {
         for (int j = i + 1; j < world_size; ++j) {
           double new_cost = update_cost(mapping, out_latency_map, rank_comm,
                                         world_size, i, j, best_cost);
 
-          if (new_cost < best_cost) {
+          if (new_cost < best_cost - 1e-9) {
             best_cost = new_cost;
             std::swap(mapping[i], mapping[j]);
             improved = true;
