@@ -1,0 +1,11 @@
+[project]
+name = "sampi"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.5.0",
+    "pandas>=3.0.3",
+    "scipy>=1.18.0",
+]
