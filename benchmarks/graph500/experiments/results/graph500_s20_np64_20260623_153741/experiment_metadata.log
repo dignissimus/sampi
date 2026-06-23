@@ -1,0 +1,8 @@
+EXPERIMENT ID: graph500_s20_np64_20260623_153741
+TIMESTAMP:     Tue 23 Jun 15:37:41 BST 2026
+CONFIG USED:   /home/vqqw43/dampi/sampi/benchmarks/graph500/experiments/1node_scale20.conf
+--------------------------------------------------
+SCALE:         20
+EDGEFACTOR:    16
+TOTAL RANKS:   64 (1 nodes @ 64 tasks/node)
+--------------------------------------------------
