@@ -1,0 +1,10 @@
+EXPERIMENT ID: graph500_s20_np64_20260623_123334
+TIMESTAMP:     Tue 23 Jun 12:33:34 BST 2026
+CONFIG USED:   /home/vqqw43/dampi/sampi/benchmarks/graph500/experiments/1node_scale20.conf
+--------------------------------------------------
+SCALE:         20
+EDGEFACTOR:    16
+TOTAL RANKS:   64 (1 nodes @ 64 tasks/node)
+--------------------------------------------------
+SLURM JOB ID:  17592645
+ALLOC NODES:   cn014
