@@ -257,7 +257,7 @@ public:
           double new_cost = update_cost(mapping, out_latency_map, rank_comm,
                                         world_size, i, j, best_cost);
 
-          if (new_cost < best_cost - 1e-9) {
+          if (new_cost < best_cost) {
             best_cost = new_cost;
             std::swap(mapping[i], mapping[j]);
             improved = true;
