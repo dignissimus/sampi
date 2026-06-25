@@ -1,6 +1,6 @@
 # Graph500 Benchmark
 
-Broadly, profiling incurs a <1% overhead and rank-reordering improved run time by over 25% tested with a two-sided t-tests at the 99% significance level.
+Broadly, profiling incurs a <1% overhead and rank-reordering improved run time by over 40% tested with a two-sided t-tests at the 99% significance level.
 
 This benchmark suite runs the MPI Graph500 benchmark, testing Breadth-First Search and Single-Source Shortest Path on generated graph dataset. It is configured as a weak scaling experiment where the problem size increases with the compute resources.
 
