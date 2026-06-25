@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONF_DIR="./benchmarks/graph500/experiments/stub-comparison"
+CONF_DIR="./benchmarks/graph500/experiments/hamilton-stub-comparison"
 export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_hamilton_stub"
 
 CONFIGS=(
