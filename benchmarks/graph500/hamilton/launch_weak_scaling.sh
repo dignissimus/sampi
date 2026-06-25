@@ -21,7 +21,7 @@ for conf_file in "${CONFIGS[@]}"; do
     if [ -f "$full_path" ]; then
         echo "--> Submitting: $conf_file"
         
-        bash ./benchmarks/graph500/submit_experiment.sh "$full_path"
+        bash ./benchmarks/graph500/hamilton/submit_experiment.sh "$full_path"
         
     else
         echo "--> WARNING: $conf_file not found! Skipping..."

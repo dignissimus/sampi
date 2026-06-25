@@ -52,6 +52,6 @@ if [ -n "${SLURM_ACCOUNT}" ]; then
     SLURM_ARGS+=("--account=${SLURM_ACCOUNT}")
 fi
 
-sbatch "${SLURM_ARGS[@]}" ./benchmarks/graph500/worker.sh
+sbatch "${SLURM_ARGS[@]}" ./benchmarks/graph500/hamilton/worker.sh
 
 echo "=> Job submitted! Results will populate in: ${EXP_DIR}"
