@@ -91,9 +91,9 @@ def main():
 
     # ── Palette ──────────────────────────────────────────────────────────────
     PASTEL = {
-        'Baseline':  '#C9A9A6',   # dusty rose
-        'Profile':   '#A8BBAC',   # soft sage
-        'Reordered': '#A9B8D4',   # muted periwinkle
+        'Baseline':  '#D4918C',   # dusty rose
+        'Profile':   '#8FB098',   # soft sage
+        'Reordered': '#8FADD1',   # muted periwinkle
     }
     BG    = '#fafafa'
     GRID  = '#ebebeb'
@@ -128,11 +128,11 @@ def main():
     fig, axes = plt.subplots(
         nrows=2, ncols=3,
         figsize=(13, 7),
-        sharey='row',
+        sharey=False,
         facecolor=BG,
     )
-    fig.subplots_adjust(top=0.84, hspace=0.45, wspace=0.18,
-                        left=0.07, right=0.97)
+    fig.subplots_adjust(top=0.84, hspace=0.52, wspace=0.32,
+                        left=0.09, right=0.97)
 
     for row_idx, algo in enumerate(algo_order):
         df_algo = df[df['Algorithm'] == algo]
@@ -188,15 +188,22 @@ def main():
             ax.tick_params(axis='y', labelsize=8.5)
             ax.set_xlabel('')
 
-            if row_idx == 0:
-                ax.set_title(nodes, fontsize=11, fontweight='500',
-                             color=TITLE, pad=10)
+            ax.set_title(nodes, fontsize=11, fontweight='500',
+                         color=TITLE, pad=10)
 
-            if col_idx == 0:
-                ax.set_ylabel(f'{algo}  —  speedup vs baseline',
-                              fontsize=9.5, labelpad=10, color=TEXT)
-            else:
-                ax.set_ylabel('')
+            ax.set_ylabel('Speedup', fontsize=9.5, labelpad=8, color=TEXT)
+
+    # ── Row titles: horizontal, above the leftmost plot in each row ─────────
+    for row_idx, algo in enumerate(algo_order):
+        ax_left = axes[row_idx][0]
+        ax_left.annotate(
+            algo,
+            xy=(0, 1), xycoords='axes fraction',
+            xytext=(0, 28), textcoords='offset points',
+            ha='left', va='bottom',
+            fontsize=13, fontweight='normal',
+            color=TITLE,
+        )
 
     # ── Legend ───────────────────────────────────────────────────────────────
     legend_handles = [
@@ -219,7 +226,7 @@ def main():
         0.5, 1.01,
         'Graph500',
         ha='center', va='bottom',
-        fontsize=14, fontweight='600',
+        fontsize=14, fontweight='normal',
         color=TITLE,
         transform=fig.transFigure,
     )
