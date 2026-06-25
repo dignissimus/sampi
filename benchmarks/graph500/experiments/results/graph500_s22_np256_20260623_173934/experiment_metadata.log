@@ -1,10 +1,10 @@
-EXPERIMENT ID: graph500_s22_np256_20260623_140421
-TIMESTAMP:     Tue 23 Jun 14:04:21 BST 2026
+EXPERIMENT ID: graph500_s22_np256_20260623_173934
+TIMESTAMP:     Tue 23 Jun 17:39:34 BST 2026
 CONFIG USED:   /home/vqqw43/dampi/sampi/benchmarks/graph500/experiments/4node_scale22.conf
 --------------------------------------------------
 SCALE:         22
 EDGEFACTOR:    16
 TOTAL RANKS:   256 (4 nodes @ 64 tasks/node)
 --------------------------------------------------
-SLURM JOB ID:  17594263
-ALLOC NODES:   cn[027,031,055-056]
+SLURM JOB ID:  17598429
+ALLOC NODES:   cn[031,039,049,055]

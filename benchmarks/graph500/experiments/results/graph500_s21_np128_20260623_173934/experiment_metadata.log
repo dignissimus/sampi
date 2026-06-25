@@ -1,10 +1,10 @@
-EXPERIMENT ID: graph500_s21_np128_20260623_140421
-TIMESTAMP:     Tue 23 Jun 14:04:21 BST 2026
+EXPERIMENT ID: graph500_s21_np128_20260623_173934
+TIMESTAMP:     Tue 23 Jun 17:39:34 BST 2026
 CONFIG USED:   /home/vqqw43/dampi/sampi/benchmarks/graph500/experiments/2node_scale21.conf
 --------------------------------------------------
 SCALE:         21
 EDGEFACTOR:    16
 TOTAL RANKS:   128 (2 nodes @ 64 tasks/node)
 --------------------------------------------------
-SLURM JOB ID:  17594262
-ALLOC NODES:   cn[057,059]
+SLURM JOB ID:  17598428
+ALLOC NODES:   cn[017-018]
