@@ -19,28 +19,32 @@ echo "ALLOC NODES:   ${SLURM_JOB_NODELIST}" >> "${EXP_DIR}/experiment_metadata.l
 
 cd "${EXP_DIR}" || exit 1
 
-# ==============================================================================
-# Phase 1: The Profiling Run
-# ==============================================================================
-echo "=> [$(date)] Starting Phase 1: Sampi Profiling Run on ${TOTAL_TASKS} ranks..."
+if [ "$SCALE" -lt 24 ]; then
+    # ==============================================================================
+    # Phase 1: The Profiling Run
+    # ==============================================================================
+    echo "=> [$(date)] Starting Phase 1: Sampi Profiling Run on ${TOTAL_TASKS} ranks..."
 
-srun --export=ALL,LD_PRELOAD="${SAMPI_BUILD_DIR}/libsampiprofile.so" ${SRUN_OPTS} --ntasks=${TOTAL_TASKS} \
-    "${GRAPH500_EXEC}" ${SCALE} ${EDGEFACTOR} > "01_profile_run.out" 2>&1
+    srun --export=ALL,LD_PRELOAD="${SAMPI_BUILD_DIR}/libsampiprofile.so" ${SRUN_OPTS} --ntasks=${TOTAL_TASKS} \
+        "${GRAPH500_EXEC}" ${SCALE} ${EDGEFACTOR} > "01_profile_run.out" 2>&1
 
-if [ ! -f "sampi_communication_profile.txt" ]; then
-    echo "ERROR: sampi_communication_profile.txt was not generated! Aborting."
-    exit 1
+    if [ ! -f "sampi_communication_profile.txt" ]; then
+        echo "ERROR: sampi_communication_profile.txt was not generated! Aborting."
+        exit 1
+    fi
+
+    # ==============================================================================
+    # Phase 2: The Boosted Run
+    # ==============================================================================
+    echo "=> [$(date)] Starting Phase 2: Sampi Boosted Run on ${TOTAL_TASKS} ranks..."
+
+    srun --export=ALL,LD_PRELOAD="${SAMPI_BUILD_DIR}/libsampiboost.so" ${SRUN_OPTS} --ntasks=${TOTAL_TASKS} \
+        "${GRAPH500_EXEC}" ${SCALE} ${EDGEFACTOR} > "02_boosted_run.out" 2>&1
+
+    echo "=> [$(date)] Boosted Experiment Complete!"
+else
+    echo "=> [$(date)] Skipping Phase 1 (Profiling) and Phase 2 (Boosted) for SCALE >= 24 due to Two-Opt overhead."
 fi
-
-# ==============================================================================
-# Phase 2: The Boosted Run
-# ==============================================================================
-echo "=> [$(date)] Starting Phase 2: Sampi Boosted Run on ${TOTAL_TASKS} ranks..."
-
-srun --export=ALL,LD_PRELOAD="${SAMPI_BUILD_DIR}/libsampiboost.so" ${SRUN_OPTS} --ntasks=${TOTAL_TASKS} \
-    "${GRAPH500_EXEC}" ${SCALE} ${EDGEFACTOR} > "02_boosted_run.out" 2>&1
-
-echo "=> [$(date)] Experiment Complete!"
 
 # ==============================================================================
 # Phase 3: Normal run
