@@ -59,17 +59,21 @@ def main():
     # Compute speedup = mean(Baseline) / mean(other)  per run
     # For per-sample speedup we pair element-wise if lengths match,
     # otherwise fall back to ratio of means.
-    # Baseline speedup is always 1.0 (reference).
+    # Baseline is fixed at 1.0 but its error bar shows the coefficient of
+    # variation (std/mean) of the raw times — the same relative uncertainty
+    # that propagates into the other speedup ratios.
     data = []
     for (node_count, algo), modes in records.items():
         base = modes['Baseline']
         nodes_label = f'{node_count} Node{"s" if node_count > 1 else ""}'
-        for s in np.ones(len(base)):
+        if len(base) > 0:
+            cv = base.std() / base.mean()   # relative spread around 1.0
             data.append({
                 'Nodes':     nodes_label,
                 'Algorithm': algo,
                 'Mode':      'Baseline',
-                'Speedup':   s,
+                'Speedup':   1.0,
+                'Speedup_std': cv,
             })
         for mode in ['Profile', 'Reordered']:
             other = modes[mode]
@@ -79,13 +83,13 @@ def main():
                 speedups = np.array([base.mean() / other.mean()])
             else:
                 continue
-            for s in speedups:
-                data.append({
-                    'Nodes':     nodes_label,
-                    'Algorithm': algo,
-                    'Mode':      mode,
-                    'Speedup':   s,
-                })
+            data.append({
+                'Nodes':     nodes_label,
+                'Algorithm': algo,
+                'Mode':      mode,
+                'Speedup':   speedups.mean(),
+                'Speedup_std': speedups.std(),
+            })
 
     df = pd.DataFrame(data)
 
@@ -147,11 +151,11 @@ def main():
             bar_width   = 0.52
 
             for xi, mode in enumerate(mode_order):
-                vals = df_sub[df_sub['Mode'] == mode]['Speedup'].values
-                if len(vals) == 0:
+                row = df_sub[df_sub['Mode'] == mode]
+                if len(row) == 0:
                     continue
-                mean = vals.mean()
-                std  = vals.std()
+                mean = row['Speedup'].values[0]
+                std  = row['Speedup_std'].values[0]
 
                 ax.bar(
                     xi, mean,
