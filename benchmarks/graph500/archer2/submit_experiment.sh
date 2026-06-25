@@ -13,6 +13,9 @@ fi
 
 source "$CONFIG_FILE"
 
+# Source ARCHER2 config
+source "./benchmarks/configs/archer2.cfg"
+
 TOTAL_TASKS=$(( NUM_NODES * TASKS_PER_NODE ))
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 EXP_NAME="graph500_s${SCALE}_np${TOTAL_TASKS}_${TIMESTAMP}"
@@ -50,6 +53,10 @@ fi
 
 if [ -n "${SLURM_ACCOUNT}" ]; then
     SLURM_ARGS+=("--account=${SLURM_ACCOUNT}")
+fi
+
+if [ -n "${SLURM_QOS}" ]; then
+    SLURM_ARGS+=("--qos=${SLURM_QOS}")
 fi
 
 sbatch "${SLURM_ARGS[@]}" ./benchmarks/graph500/archer2/worker.sh
