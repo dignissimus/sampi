@@ -1,19 +1,19 @@
 #!/bin/bash
 
-CONF_DIR="./benchmarks/graph500/experiments"
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_64core"
+CONF_DIR="./benchmarks/graph500/experiments/128-core-experiments"
+export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core"
 
 CONFIGS=(
-    "1node_scale20.conf"
-    "2node_scale21.conf"
-    "4node_scale22.conf"
-    "8node_scale23.conf"
-    "16node_scale24.conf"
-    "32node_scale25.conf"
+    "1node_scale21.conf"
+    "2node_scale22.conf"
+    "4node_scale23.conf"
+    "8node_scale24.conf"
+    "16node_scale25.conf"
+    "32node_scale26.conf"
 )
 
 echo "==========================================================="
-echo " INITATING SAMPI WEAK SCALING BATTERY"
+echo " INITATING SAMPI WEAK SCALING BATTERY (128-CORE)"
 echo "==========================================================="
 
 for conf_file in "${CONFIGS[@]}"; do
