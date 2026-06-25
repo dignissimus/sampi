@@ -18,9 +18,14 @@ add_library(sampiboost SHARED sampiboost.cc rank_reorder.h rank_placement.h)
 target_include_directories(sampiboost PRIVATE ${MPI_INCLUDE_PATH})
 target_link_libraries(sampiboost ${MPI_CXX_LIBRARIES})
 
+add_library(sampistub SHARED sampistub.cc rank_reorder.h)
+target_include_directories(sampistub PRIVATE ${MPI_INCLUDE_PATH})
+target_link_libraries(sampistub ${MPI_CXX_LIBRARIES})
+
 set_target_properties(sampiprofile PROPERTIES OUTPUT_NAME "sampiprofile")
 set_target_properties(sampiboost PROPERTIES OUTPUT_NAME "sampiboost")
+set_target_properties(sampistub PROPERTIES OUTPUT_NAME "sampistub")
 
-install(TARGETS sampiprofile sampiboost
+install(TARGETS sampiprofile sampiboost sampistub
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
