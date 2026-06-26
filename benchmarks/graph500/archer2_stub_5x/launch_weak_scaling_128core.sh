@@ -1,19 +1,20 @@
 #!/bin/bash
 
-CONF_DIR="./benchmarks/graph500/experiments/stub-comparison/128-core-experiments"
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub"
+CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs/128-core-experiments"
+SUITE_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x/suite_${SUITE_TIMESTAMP}"
 
 CONFIGS=(
-    "1node_scale21.conf"
-    "2node_scale22.conf"
-    "4node_scale23.conf"
-    "8node_scale24.conf"
-    "16node_scale25.conf"
-    "32node_scale26.conf"
+    "1node.conf"
+    "2node.conf"
+    "4node.conf"
+    "8node.conf"
+    "16node.conf"
+    "32node.conf"
 )
 
 echo "==========================================================="
-echo " INITATING SAMPI WEAK SCALING BATTERY (128-CORE)"
+echo " INITATING SAMPI WEAK SCALING BATTERY"
 echo "==========================================================="
 
 for conf_file in "${CONFIGS[@]}"; do
@@ -22,7 +23,7 @@ for conf_file in "${CONFIGS[@]}"; do
     if [ -f "$full_path" ]; then
         echo "--> Submitting: $conf_file"
         
-        bash ./benchmarks/graph500/archer2_stub_comparison/submit_experiment.sh "$full_path"
+        bash ./benchmarks/graph500/archer2_stub_5x/submit_experiment.sh "$full_path"
         
     else
         echo "--> WARNING: $conf_file not found! Skipping..."

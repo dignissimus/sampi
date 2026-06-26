@@ -1,8 +1,8 @@
 #!/bin/bash
 
-CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs/128-core-experiments"
+CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs"
 SUITE_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x/suite_${SUITE_TIMESTAMP}"
+export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_64core_stub_5x/suite_${SUITE_TIMESTAMP}"
 
 CONFIGS=(
     "1node.conf"
@@ -14,7 +14,7 @@ CONFIGS=(
 )
 
 echo "==========================================================="
-echo " INITATING SAMPI WEAK SCALING BATTERY"
+echo " INITATING SAMPI WEAK SCALING BATTERY (64-CORE)"
 echo "==========================================================="
 
 for conf_file in "${CONFIGS[@]}"; do
