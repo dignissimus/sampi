@@ -146,8 +146,8 @@ struct TreeCostModel {
 
     for (int i = 0; i < world_size; ++i) {
       for (int j = i; j < world_size; ++j) {
-        double latency = (world_rank == i) ? local_latency_map[{i, j}] : 0.0;
-        PMPI_Bcast(&latency, 1, MPI_DOUBLE, i, MPI_COMM_WORLD);
+        long long int latency = (world_rank == i) ? local_latency_map[{i, j}] : 0LL;
+        PMPI_Bcast(&latency, 1, MPI_LONG_LONG_INT, i, MPI_COMM_WORLD);
         local_latency_map[{i, j}] = latency;
         local_latency_map[{j, i}] = latency;
       }
@@ -164,10 +164,10 @@ private:
     return it != rank_comm.end() ? it->second : 0LL;
   }
 
-  static double compute_cost(const std::vector<int> &mapping,
+  static long long int compute_cost(const std::vector<int> &mapping,
                              const LatencyMapType &latency_map,
                              const RankCommMapType &rank_comm, int size) {
-    double cost = 0.0;
+    long long int cost = 0LL;
     for (int i = 0; i < size; ++i) {
       for (int j = 0; j < i; ++j) {
         int pi = mapping[i];
@@ -193,11 +193,11 @@ private:
     return cost;
   }
 
-  static double update_cost(const std::vector<int> &mapping,
+  static long long int update_cost(const std::vector<int> &mapping,
                             const LatencyMapType &latency_map,
                             const RankCommMapType &rank_comm, int size, int si,
-                            int sj, double original_cost) {
-    double cost_difference = 0.0;
+                            int sj, long long int original_cost) {
+    long long int cost_difference = 0LL;
     int pi = mapping[si];
     int pj = mapping[sj];
 
@@ -233,7 +233,7 @@ public:
     std::vector<int> mapping(world_size);
     std::iota(mapping.begin(), mapping.end(), 0);
 
-    double best_cost =
+    long long int best_cost =
         compute_cost(mapping, out_latency_map, rank_comm, world_size);
     bool improved = true;
     int iteration_count = 0;
@@ -254,10 +254,10 @@ public:
 
       for (int i = 0; i < world_size; ++i) {
         for (int j = i + 1; j < world_size; ++j) {
-          double new_cost = update_cost(mapping, out_latency_map, rank_comm,
+          long long int new_cost = update_cost(mapping, out_latency_map, rank_comm,
                                         world_size, i, j, best_cost);
 
-          if (new_cost < best_cost - 1e-9) {
+          if (new_cost < best_cost) {
             best_cost = new_cost;
             std::swap(mapping[i], mapping[j]);
             improved = true;

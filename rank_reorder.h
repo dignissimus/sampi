@@ -15,10 +15,10 @@ struct ReorderConfig {
   int ping_pong_tag = 999;
   int ping_pong_msg_size = 8;
 
-  double latency_arbitrary = 4.0;
-  double latency_same_node = 2.0;
-  double latency_same_socket = 1.0;
-  double latency_same_core = 0.0;
+  long long int latency_arbitrary = 4;
+  long long int latency_same_node = 2;
+  long long int latency_same_socket = 1;
+  long long int latency_same_core = 0;
 };
 
 struct PairHash {
@@ -31,7 +31,7 @@ struct PairHash {
 };
 
 using LatencyMapType =
-    std::unordered_map<std::pair<int, int>, double, PairHash>;
+    std::unordered_map<std::pair<int, int>, long long int, PairHash>;
 using RankCommMapType = std::unordered_map<std::pair<int, int>, long long int, PairHash>;
 
 class RankReorder {
