@@ -19,7 +19,7 @@ echo "ALLOC NODES:   ${SLURM_JOB_NODELIST}" >> "${EXP_DIR}/experiment_metadata.l
 
 cd "${EXP_DIR}" || exit 1
 
-if [ "$SCALE" -lt 24 ] && [ "$TASKS_PER_NODE" -ne 128 ]; then
+if [ "$TOTAL_TASKS" -lt 1024 ]; then
     # ==============================================================================
     # Phase 1: The Profiling Run
     # ==============================================================================
@@ -33,7 +33,7 @@ if [ "$SCALE" -lt 24 ] && [ "$TASKS_PER_NODE" -ne 128 ]; then
         exit 1
     fi
 else
-    echo "=> [$(date)] Skipping Phase 1 (Profiling) and Phase 2 (Boosted) due to Two-Opt overhead or NUMA conflicts on 128-core nodes."
+    echo "=> [$(date)] Skipping Phase 1 (Profiling) and Phase 2 (Boosted) because TOTAL_TASKS ($TOTAL_TASKS) >= 1024, which causes excessive Two-Opt overhead."
 fi
 
 # ==============================================================================
@@ -45,7 +45,7 @@ for iter in {1..5}; do
     echo "=============================================================================="
 
     RUNS=("vanilla" "stub")
-    if [ "$SCALE" -lt 24 ] && [ "$TASKS_PER_NODE" -ne 128 ]; then
+    if [ "$TOTAL_TASKS" -lt 1024 ]; then
         RUNS+=("boost")
     fi
 

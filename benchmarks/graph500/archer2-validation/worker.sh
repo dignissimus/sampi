@@ -19,7 +19,7 @@ echo "ALLOC NODES:   ${SLURM_JOB_NODELIST}" >> "${EXP_DIR}/experiment_metadata.l
 
 cd "${EXP_DIR}" || exit 1
 
-if [ "$SCALE" -lt 24 ]; then
+if [ "$TOTAL_TASKS" -lt 1024 ]; then
     # ==============================================================================
     # Phase 1: The Profiling Run
     # ==============================================================================
@@ -43,7 +43,7 @@ if [ "$SCALE" -lt 24 ]; then
 
     echo "=> [$(date)] Boosted Experiment Complete!"
 else
-    echo "=> [$(date)] Skipping Phase 1 (Profiling) and Phase 2 (Boosted) for SCALE >= 24 due to Two-Opt overhead."
+    echo "=> [$(date)] Skipping Phase 1 (Profiling) and Phase 2 (Boosted) because TOTAL_TASKS ($TOTAL_TASKS) >= 1024, which causes excessive Two-Opt overhead."
 fi
 
 # ==============================================================================
