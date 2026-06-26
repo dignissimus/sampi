@@ -2,7 +2,7 @@
 
 CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs"
 SUITE_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_64core_stub_5x/suite_${SUITE_TIMESTAMP}"
+export RESULTS_BASE_DIR="./benchmarks/graph500/archer2_stub_5x/results_64core/suite_${SUITE_TIMESTAMP}"
 
 CONFIGS=(
     "1node.conf"
