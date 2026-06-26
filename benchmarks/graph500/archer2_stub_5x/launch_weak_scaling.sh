@@ -1,7 +1,8 @@
 #!/bin/bash
 
 CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs/128-core-experiments"
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x"
+SUITE_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x/suite_${SUITE_TIMESTAMP}"
 
 CONFIGS=(
     "1node.conf"
