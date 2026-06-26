@@ -4,12 +4,12 @@ CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs/128-core-experiments
 export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x"
 
 CONFIGS=(
-    "1node_scale21.conf"
-    "2node_scale22.conf"
-    "4node_scale23.conf"
-    "8node_scale24.conf"
-    "16node_scale25.conf"
-    "32node_scale26.conf"
+    "1node.conf"
+    "2node.conf"
+    "4node.conf"
+    "8node.conf"
+    "16node.conf"
+    "32node.conf"
 )
 
 echo "==========================================================="
