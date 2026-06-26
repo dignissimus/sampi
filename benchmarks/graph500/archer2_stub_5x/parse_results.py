@@ -40,18 +40,18 @@ def analyze_directory(base_dir):
     for d in dirs:
         if not os.path.isdir(d): continue
         basename = os.path.basename(d)
-        m = re.search(r'_s(\d+)_np(\d+)_', basename)
+        m = re.search(r'(\d+)nodes_np(\d+)_', basename)
         if m:
-            scale = int(m.group(1))
+            nodes = int(m.group(1))
             np = int(m.group(2))
-            experiments.append((scale, np, d))
+            experiments.append((nodes, np, d))
     
     experiments.sort()
     
-    print(f"{'Scale':<7} | {'Nodes (np)':<12} | {'Algorithm':<9} | {'Vanilla (s)':<12} | {'Stub (s)':<12} | {'Stub Speedup':<14} | {'Boost (s)':<12} | {'Boost Speedup'}")
+    print(f"{'Nodes':<7} | {'Tasks (np)':<12} | {'Algorithm':<9} | {'Vanilla (s)':<12} | {'Stub (s)':<12} | {'Stub Speedup':<14} | {'Boost (s)':<12} | {'Boost Speedup'}")
     print("-" * 110)
     
-    for scale, np, d in experiments:
+    for nodes, np, d in experiments:
         vanilla_res = parse_files(os.path.join(d, '00_vanilla_run_*.out'))
         stub_res = parse_files(os.path.join(d, '03_stub_run_*.out'))
         boost_res = parse_files(os.path.join(d, '02_boosted_run_*.out'))
@@ -92,7 +92,7 @@ def analyze_directory(base_dir):
                 b_speedup_str = f"{b_speedup:+.2f}%"
             
             if algo == 'bfs':
-                print(f"{scale:<7} | np={np:<9} | {algo.upper():<9} | {v_time:<12.6f} | {s_time_str:<12} | {s_speedup_str:<14} | {b_time_str:<12} | {b_speedup_str}")
+                print(f"{nodes:<7} | np={np:<9} | {algo.upper():<9} | {v_time:<12.6f} | {s_time_str:<12} | {s_speedup_str:<14} | {b_time_str:<12} | {b_speedup_str}")
             else:
                 print(f"{'':<7} | {'':<12} | {algo.upper():<9} | {v_time:<12.6f} | {s_time_str:<12} | {s_speedup_str:<14} | {b_time_str:<12} | {b_speedup_str}")
         print("-" * 110)

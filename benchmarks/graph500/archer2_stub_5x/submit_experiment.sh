@@ -18,7 +18,7 @@ source "./benchmarks/configs/archer2.cfg"
 
 TOTAL_TASKS=$(( NUM_NODES * TASKS_PER_NODE ))
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-EXP_NAME="graph500_s${SCALE}_np${TOTAL_TASKS}_${TIMESTAMP}"
+EXP_NAME="${NUM_NODES}nodes_np${TOTAL_TASKS}_${TIMESTAMP}"
 
 if [ -z "$RESULTS_BASE_DIR" ]; then
     RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results"
