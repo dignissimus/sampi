@@ -12,11 +12,14 @@
 #include <vector>
 #include "communicators.h"
 #include "profiler.h"
+#include "network_metrics.h"
 
 int MPI_Init(int *argc, char ***argv) {
   int return_value = PMPI_Init(argc, argv);
   if (return_value != MPI_SUCCESS)
     return return_value;
+
+  print_network_metrics("PROFILE");
 
   int world_rank, world_size;
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -35,6 +38,7 @@ int MPI_Init(int *argc, char ***argv) {
 int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
   int result = PMPI_Init_thread(argc, argv, required, provided);
   if (result == MPI_SUCCESS) {
+    print_network_metrics("PROFILE");
     int rank, size;
     PMPI_Comm_rank(MPI_COMM_WORLD, &rank);
     PMPI_Comm_size(MPI_COMM_WORLD, &size);

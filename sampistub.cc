@@ -13,12 +13,15 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "network_metrics.h"
 
 // TODO: Read error value
 int MPI_Init(int *argc, char ***argv) {
   int return_value = PMPI_Init(argc, argv);
   if (return_value != MPI_SUCCESS)
     return return_value;
+
+  print_network_metrics("STUB");
 
   int world_rank, world_size;
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -36,6 +39,8 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
   int return_value = PMPI_Init_thread(argc, argv, required, provided);
   if (return_value != MPI_SUCCESS)
     return return_value;
+
+  print_network_metrics("STUB");
 
   int world_rank, world_size;
   PMPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
