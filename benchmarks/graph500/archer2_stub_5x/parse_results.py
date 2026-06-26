@@ -40,7 +40,7 @@ def analyze_directory(base_dir):
     for d in dirs:
         if not os.path.isdir(d): continue
         basename = os.path.basename(d)
-        m = re.search(r'(\d+)nodes_np(\d+)_', basename)
+        m = re.search(r'(\d+)nodes_np(\d+)', basename)
         if m:
             nodes = int(m.group(1))
             np = int(m.group(2))
