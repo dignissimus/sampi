@@ -1,7 +1,7 @@
 #!/bin/bash
 
-CONF_DIR="./benchmarks/graph500/experiments/stub_5x_configs/128-core-experiments"
-export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub_5x"
+CONF_DIR="./benchmarks/graph500/experiments/stub-comparison/128-core-experiments"
+export RESULTS_BASE_DIR="./benchmarks/graph500/experiments/results_archer2_128core_stub"
 
 CONFIGS=(
     "1node_scale21.conf"
@@ -13,7 +13,7 @@ CONFIGS=(
 )
 
 echo "==========================================================="
-echo " INITATING SAMPI WEAK SCALING BATTERY"
+echo " INITATING SAMPI WEAK SCALING BATTERY (128-CORE)"
 echo "==========================================================="
 
 for conf_file in "${CONFIGS[@]}"; do
@@ -22,7 +22,7 @@ for conf_file in "${CONFIGS[@]}"; do
     if [ -f "$full_path" ]; then
         echo "--> Submitting: $conf_file"
         
-        bash ./benchmarks/graph500/archer2_stub_5x/submit_experiment.sh "$full_path"
+        bash ./benchmarks/graph500/archer2_stub_comparison/submit_experiment.sh "$full_path"
         
     else
         echo "--> WARNING: $conf_file not found! Skipping..."
